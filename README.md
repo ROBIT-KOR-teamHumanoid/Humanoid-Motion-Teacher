@@ -19,3 +19,4 @@ make
 ```
 
 ## how to use
+[Robit_Humanoid_Motion_Teacher_v2.pptx](https://github.com/user-attachments/files/18498512/Robit_Humanoid_Motion_Teacher_v2.pptx)
