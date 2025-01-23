@@ -180,22 +180,23 @@ bool DynamixelCtrl::init_indirect_address() {
   for (auto& dynamixel : dynamixels) {
     bool dxl_set_indirect_address_result =
         dynamixel->set_indirect_address(BulkWrite);
-    if (!dxl_set_indirect_address_result) {
-      std::cerr << "Failed to set indirect address on Dynamixel ID: "
-                << dynamixel->get_id() << std::endl;
-      return false;
-    } else {
-      // std::cout << "Successfully set indirect address on Dynamixel ID: " <<
-      // dynamixel->get_id()
-      //           << std::endl;
-    }
+    // if (!dxl_set_indirect_address_result) {
+    //   std::cerr << "Failed to set indirect address on Dynamixel ID: "
+    //             << dynamixel->get_id() << std::endl;
+    //   return false;
+    // } else {
+    //   // std::cout << "Successfully set indirect address on Dynamixel ID: "
+    //   <<
+    //   // dynamixel->get_id()
+    //   //           << std::endl;
+    // }
   }
 
   int dxl_comm_result = BulkWrite.txPacket();
-  if (dxl_comm_result != COMM_SUCCESS) {
-    std::cerr << "Failed to bulk write" << std::endl;
-    return false;
-  }
+  // if (dxl_comm_result != COMM_SUCCESS) {
+  //   std::cerr << "Failed to bulk write" << std::endl;
+  //   return false;
+  // }
   return true;
 }
 
