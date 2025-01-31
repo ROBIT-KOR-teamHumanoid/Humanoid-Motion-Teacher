@@ -1,13 +1,13 @@
 #ifndef HUMANOID_DYNAMIXEL_HPP_
 #define HUMANOID_DYNAMIXEL_HPP_
 
-#include "Humanoid-Motion-Teacher/control_table.hpp"
-#include "dynamixel_sdk/dynamixel_sdk.h"
-
 #include <cmath>
 #include <iostream>
 #include <string>
 #include <vector>
+
+#include "Humanoid-Motion-Teacher/control_table.hpp"
+#include "dynamixel_sdk/dynamixel_sdk.h"
 
 // dynamixel unit
 // position : 0~4095 (0~2pi) -> MinPosition(52) ~ MaxPosition(48)
@@ -51,10 +51,17 @@
 
 #define READ_LENGTH 28
 
-namespace humanoid
-{
+namespace humanoid {
 
-enum DynamixelType { MX, PH54_200, PH54_100, PH42_020, PM54_060, PM54_040, PM42_010 };
+enum DynamixelType {
+  MX,
+  PH54_200,
+  PH54_100,
+  PH42_020,
+  PM54_060,
+  PM54_040,
+  PM42_010
+};
 extern std::vector<std::string> dynamixel_type_str;
 
 enum AddressNumber {
@@ -71,20 +78,25 @@ enum AddressNumber {
   PRESENT_TEMPERATURE = 27     // 1 byte
 };
 
-enum DynamixelRebootSequence { STABLE, REBOOT_START, REBOOT_PING, INITIALIZE, SET_TORQUE };
+enum DynamixelRebootSequence {
+  STABLE,
+  REBOOT_START,
+  REBOOT_PING,
+  INITIALIZE,
+  SET_TORQUE
+};
 
 // Dynamixel
-class Dynamixel
-{
+class Dynamixel {
   // Dynamixel Information
-public:
+ public:
   DynamixelType type;
   uint8_t id;
   double min_rad, max_rad;  // [rad]
   uint16_t dynamixel_indirect_address;
   double dxl_rps_ratio, dxl_acc_ratio, dxl_current_ratio;
 
-  double max_velocity_limit;  // [rev/min]
+  double max_velocity_limit = 45.00;  // [rev/min]
 
   std::vector<uint8_t> dynamixel_addresses;
 
@@ -108,8 +120,6 @@ public:
   double profile_acceleration;
   double profile_velocity;
 
-  int numbering;
-
   int32_t goal_position_raw;
   int32_t profile_acceleration_raw;
   int32_t profile_velocity_raw;
@@ -117,7 +127,9 @@ public:
   // Dynamixel Information Functions
   DynamixelType get_type() { return type; }
   int get_id() { return id; }
-  std::pair<double, double> get_rad_limit() { return std::make_pair(min_rad, max_rad); }
+  std::pair<double, double> get_rad_limit() {
+    return std::make_pair(min_rad, max_rad);
+  }
   bool get_torque_status() { return torque_enabled; }
   bool get_moving_status() { return is_moving; }
   uint8_t get_error_status() { return error_status; }
@@ -130,39 +142,40 @@ public:
   DynamixelRebootSequence get_reboot_sequence() { return reboot_seq_; }
 
   // Dynamixel Control Functions
-public:
-  Dynamixel(DynamixelType type, uint8_t id, double min_rad = -M_PI, double max_rad = M_PI);
+ public:
+  Dynamixel(DynamixelType type, uint8_t id, double min_rad = -M_PI,
+            double max_rad = M_PI);
   ~Dynamixel();
 
-  bool get_dynamixel_status(dynamixel::GroupSyncRead & SyncRead);
-  bool get_max_velocity_limit(dynamixel::GroupSyncRead & SyncRead);
+  bool get_dynamixel_status(dynamixel::GroupSyncRead& SyncRead);
+  bool get_max_velocity_limit(dynamixel::GroupSyncRead& SyncRead);
 
-  bool set_indirect_address(dynamixel::GroupBulkWrite & BulkWrite);
-  bool set_single_indirect_address(
-    dynamixel::PacketHandler * packet_handler, dynamixel::PortHandler * port_handler);
+  bool set_indirect_address(dynamixel::GroupBulkWrite& BulkWrite);
+  bool set_single_indirect_address(dynamixel::PacketHandler* packet_handler,
+                                   dynamixel::PortHandler* port_handler);
 
-  bool set_torque(dynamixel::GroupSyncWrite & SyncWrite, bool torque);
-  bool set_single_torque(
-    dynamixel::PacketHandler * packet_handler, dynamixel::PortHandler * port_handler, bool torque);
+  bool set_torque(dynamixel::GroupSyncWrite& SyncWrite, bool torque);
+  bool set_single_torque(dynamixel::PacketHandler* packet_handler,
+                         dynamixel::PortHandler* port_handler, bool torque);
 
   bool set_position(double position);
   bool set_velocity(double velocity);
   bool set_acceleration(double acceleration);
   bool set_control_data(double position, double velocity, double acceleration);
 
-  bool set_control_data_param(dynamixel::GroupSyncWrite & SyncWrite);
+  bool set_control_data_param(dynamixel::GroupSyncWrite& SyncWrite);
 
   static uint16_t address(const uint16_t address);
 
-  void reboot_sequence(
-    dynamixel::PacketHandler * packet_handler, dynamixel::PortHandler * port_handler);
+  void reboot_sequence(dynamixel::PacketHandler* packet_handler,
+                       dynamixel::PortHandler* port_handler);
 
   std::string get_reboot_sequence_str() const;
   std::string sequence_to_string(DynamixelRebootSequence seq) const;
 
-private:
-  void divide_byte(std::vector<uint8_t> & data, int address, int byte_size);
-  void add_address(const std::pair<int, int> & control_table);
+ private:
+  void divide_byte(std::vector<uint8_t>& data, int address, int byte_size);
+  void add_address(const std::pair<int, int>& control_table);
 
   double min_max_rad(int32_t min, int32_t max, int32_t position);
   double to_rad(int32_t position);

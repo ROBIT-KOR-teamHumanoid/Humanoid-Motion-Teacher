@@ -132,6 +132,9 @@ bool Dynamixel::get_dynamixel_status(dynamixel::GroupSyncRead& SyncRead) {
 }
 
 bool Dynamixel::set_indirect_address(dynamixel::GroupBulkWrite& BulkWrite) {
+  std::cout << "id : " << static_cast<int>(id)
+            << " indirect address : " << dynamixel_indirect_address
+            << " size : " << dynamixel_addresses.size() << std::endl;
   return BulkWrite.addParam(id, dynamixel_indirect_address,
                             dynamixel_addresses.size(),
                             dynamixel_addresses.data());
@@ -233,6 +236,11 @@ bool Dynamixel::set_control_data_param(dynamixel::GroupSyncWrite& SyncWrite) {
   }
 
   position_data = to_position(goal_position);
+
+  std::cout << "id : " << static_cast<int>(id)
+            << "profile_velocity : " << profile_velocity
+            << " position : " << position_data
+            << " velocity : " << velocity_data << std::endl;
 
   divide_byte(control_data_vector, acceleration_data, 4);
   divide_byte(control_data_vector, velocity_data, 4);

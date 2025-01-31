@@ -122,6 +122,8 @@ void MainWindow::init_dynamixel_ctrl() {
   if (!setup_dynamixel_control()) {
     std::cout << "Failed to setup Dynamixel control" << std::endl;
     return;
+  } else {
+    std::cout << "Setup Dynamixel control" << std::endl;
   }
 
   complete_connection();
@@ -174,14 +176,26 @@ bool MainWindow::search_dynamixels() {
   dynamixel_goal_velocities_.clear();
   dynamixel_goal_accelerations_.clear();
 
-  for (uint8_t id = ui->min_range->value(); id <= ui->max_range->value();
-       id++) {
-    update_search_progress(id);
-
-    if (dynamixel_init_ && dynamixel_init_->ping_dynamixel(id)) {
-      store_dynamixel_info(id);
-    }
-  }
+  // TODO: Dynamixel ID search with file stream
+  store_dynamixel_info(0);
+  store_dynamixel_info(1);
+  store_dynamixel_info(2);
+  store_dynamixel_info(3);
+  store_dynamixel_info(4);
+  store_dynamixel_info(5);
+  store_dynamixel_info(10);
+  store_dynamixel_info(11);
+  store_dynamixel_info(12);
+  store_dynamixel_info(13);
+  store_dynamixel_info(14);
+  store_dynamixel_info(15);
+  store_dynamixel_info(16);
+  store_dynamixel_info(17);
+  store_dynamixel_info(18);
+  store_dynamixel_info(19);
+  store_dynamixel_info(20);
+  store_dynamixel_info(21);
+  store_dynamixel_info(22);
 
   if (dynamixel_ids_.empty()) {
     QMessageBox::critical(this, "Error", "No Dynamixel found");
@@ -193,6 +207,10 @@ bool MainWindow::search_dynamixels() {
       this, "Success",
       "Found " + QString::number(dynamixel_ids_.size()) + " devices");
   return true;
+
+  dynamixel_goal_positions_.resize(dynamixel_ids_.size(), 0);
+  dynamixel_goal_velocities_.resize(dynamixel_ids_.size(), 0);
+  dynamixel_goal_accelerations_.resize(dynamixel_ids_.size(), 0);
 }
 
 void MainWindow::update_search_progress(uint8_t id) {
@@ -535,92 +553,103 @@ void MainWindow::on_motor_set_clicked() {
 void MainWindow::on_motor_set_step_clicked() {}
 
 void MainWindow::dynamixel_status_timeout() {
-  try {
-    dynamixel_ctrl_->read_dynamixel_status();
-  } catch (const std::runtime_error &e) {
-    QMessageBox::critical(this, "Error to read dynamixel status", e.what());
-    try {
-      dynamixel_ctrl_->auto_reboot();
-    } catch (const std::runtime_error &e) {
-      QMessageBox::critical(this, "Error to auto reboot", e.what());
-    }
-  }
+  // for (int i = 0; i < dynamixel_ids_.size(); i++) {
+  //   std::cout << "dynamixel_goal_positions_[" << i
+  //             << "]: " << dynamixel_goal_positions_[i] << std::endl;
+  // }
+  // try {
+  //   dynamixel_ctrl_->read_dynamixel_status();
+  // } catch (const std::runtime_error &e) {
+  //   QMessageBox::critical(this, "Error to read dynamixel status",
+  //   e.what()); try {
+  //     dynamixel_ctrl_->auto_reboot();
+  //   } catch (const std::runtime_error &e) {
+  //     QMessageBox::critical(this, "Error to auto reboot", e.what());
+  //   }
+  // }
 
-  if (ui->dynamixel->rowCount() != dynamixel_ids_.size()) {
-    ui->dynamixel->clearContents();
-    ui->dynamixel->setRowCount(dynamixel_ids_.size());
-  }
+  // if (ui->dynamixel->rowCount() != dynamixel_ids_.size()) {
+  //   ui->dynamixel->clearContents();
+  //   ui->dynamixel->setRowCount(dynamixel_ids_.size());
+  // }
 
-  for (size_t row = 0; row < dynamixel_ids_.size(); row++) {
-    auto createOrUpdateItem = [this, row](int column, const QString &text) {
-      QTableWidgetItem *item = ui->dynamixel->item(row, column);
-      if (!item) {
-        item = new QTableWidgetItem(text);
-        ui->dynamixel->setItem(row, column, item);
-      } else {
-        item->setText(text);
-      }
-      return item;
-    };
+  // for (size_t row = 0; row < dynamixel_ids_.size(); row++) {
+  //   auto createOrUpdateItem = [this, row](int column, const QString &text)
+  //   {
+  //     QTableWidgetItem *item = ui->dynamixel->item(row, column);
+  //     if (!item) {
+  //       item = new QTableWidgetItem(text);
+  //       ui->dynamixel->setItem(row, column, item);
+  //     } else {
+  //       item->setText(text);
+  //     }
+  //     return item;
+  //   };
 
-    createOrUpdateItem(0, QString::number(dynamixel_ids_[row]));
-    auto *torque = createOrUpdateItem(
-        1,
-        dynamixel_ctrl_->dynamixels[row]->get_torque_status() ? "ON" : "OFF");
-    torque->setForeground(dynamixel_ctrl_->dynamixels[row]->get_torque_status()
-                              ? Qt::green
-                              : Qt::red);
+  //   createOrUpdateItem(0, QString::number(dynamixel_ids_[row]));
+  //   auto *torque = createOrUpdateItem(
+  //       1,
+  //       dynamixel_ctrl_->dynamixels[row]->get_torque_status() ? "ON" :
+  //       "OFF");
+  //   torque->setForeground(dynamixel_ctrl_->dynamixels[row]->get_torque_status()
+  //                             ? Qt::green
+  //                             : Qt::red);
 
-    auto *error = createOrUpdateItem(
-        2,
-        QString::number(dynamixel_ctrl_->dynamixels[row]->get_error_status()));
-    error->setForeground(
-        dynamixel_ctrl_->dynamixels[row]->get_error_status() > 0 ? Qt::red
-                                                                 : Qt::green);
+  //   auto *error = createOrUpdateItem(
+  //       2,
+  //       QString::number(dynamixel_ctrl_->dynamixels[row]->get_error_status()));
+  //   error->setForeground(
+  //       dynamixel_ctrl_->dynamixels[row]->get_error_status() > 0 ? Qt::red
+  //                                                                :
+  //                                                                Qt::green);
 
-    createOrUpdateItem(
-        3,
-        QString::number(
-            dynamixel_ctrl_->dynamixels[row]->get_present_position(), 'f', 2));
-    createOrUpdateItem(
-        4,
-        QString::number(
-            dynamixel_ctrl_->dynamixels[row]->get_present_velocity(), 'f', 2));
-    createOrUpdateItem(
-        5,
-        QString::number(dynamixel_ctrl_->dynamixels[row]->get_present_current(),
-                        'f', 2));
+  //   createOrUpdateItem(
+  //       3,
+  //       QString::number(
+  //           dynamixel_ctrl_->dynamixels[row]->get_present_position(), 'f',
+  //           2));
+  //   createOrUpdateItem(
+  //       4,
+  //       QString::number(
+  //           dynamixel_ctrl_->dynamixels[row]->get_present_velocity(), 'f',
+  //           2));
+  //   createOrUpdateItem(
+  //       5,
+  //       QString::number(dynamixel_ctrl_->dynamixels[row]->get_present_current(),
+  //                       'f', 2));
 
-    auto *temp = createOrUpdateItem(
-        6, QString::number(
-               dynamixel_ctrl_->dynamixels[row]->get_present_temperature(), 'f',
-               2));
-    temp->setForeground(
-        [temp = dynamixel_ctrl_->dynamixels[row]->get_present_temperature()]() {
-          if (temp >= 25 && temp <= 45) {
-            return Qt::green;
-          } else if (temp > 45 && temp <= 55) {
-            return Qt::yellow;
-          } else {
-            return Qt::red;
-          }
-        }());
+  //   auto *temp = createOrUpdateItem(
+  //       6, QString::number(
+  //              dynamixel_ctrl_->dynamixels[row]->get_present_temperature(),
+  //              'f', 2));
+  //   temp->setForeground(
+  //       [temp =
+  //       dynamixel_ctrl_->dynamixels[row]->get_present_temperature()]() {
+  //         if (temp >= 25 && temp <= 45) {
+  //           return Qt::green;
+  //         } else if (temp > 45 && temp <= 55) {
+  //           return Qt::yellow;
+  //         } else {
+  //           return Qt::red;
+  //         }
+  //       }());
 
-    auto *voltage = createOrUpdateItem(
-        7,
-        QString::number(dynamixel_ctrl_->dynamixels[row]->get_present_voltage(),
-                        'f', 2));
-    double current_voltage =
-        dynamixel_ctrl_->dynamixels[row]->get_present_voltage();
-    voltage->setForeground(
-        (current_voltage >= 10 && current_voltage <= 15) ? Qt::green : Qt::red);
-  }
+  //   auto *voltage = createOrUpdateItem(
+  //       7,
+  //       QString::number(dynamixel_ctrl_->dynamixels[row]->get_present_voltage(),
+  //                       'f', 2));
+  //   double current_voltage =
+  //       dynamixel_ctrl_->dynamixels[row]->get_present_voltage();
+  //   voltage->setForeground(
+  //       (current_voltage >= 10 && current_voltage <= 15) ? Qt::green :
+  //       Qt::red);
+  // }
 
-  ui->dynamixel->resizeColumnsToContents();
-  for (int i = 0; i < ui->dynamixel->columnCount(); i++) {
-    ui->dynamixel->horizontalHeader()->setSectionResizeMode(
-        i, QHeaderView::Stretch);
-  }
+  // ui->dynamixel->resizeColumnsToContents();
+  // for (int i = 0; i < ui->dynamixel->columnCount(); i++) {
+  //   ui->dynamixel->horizontalHeader()->setSectionResizeMode(
+  //       i, QHeaderView::Stretch);
+  // }
 
   if (ui->selected_id->rowCount() != selected_dynamixels.size()) {
     ui->selected_id->clearContents();
@@ -841,7 +870,7 @@ void MainWindow::on_save_step_clicked() {
   for (int i = 0; i < dynamixel_ctrl_->dynamixels.size(); i++) {
     Dynamixel_postition dxl;
     dxl.id = dynamixel_ctrl_->dynamixels[i]->get_id();
-    dxl.position = dynamixel_ctrl_->dynamixels[i]->get_present_position();
+    dxl.position = dynamixel_goal_positions_[i];
     step.dxl.push_back(dxl);
   }
 
@@ -930,7 +959,7 @@ void MainWindow::on_change_step_clicked() {
   for (int i = 0; i < dynamixel_ctrl_->dynamixels.size(); i++) {
     Dynamixel_postition dxl;
     dxl.id = dynamixel_ctrl_->dynamixels[i]->get_id();
-    dxl.position = dynamixel_ctrl_->dynamixels[i]->get_present_position();
+    dxl.position = dynamixel_goal_positions_[i];
     step.dxl.push_back(dxl);
   }
 
@@ -949,6 +978,10 @@ void MainWindow::on_change_step_clicked() {
 
 void MainWindow::on_buff_save_clicked() {
   dynamixel_goal_positions_buff_ = dynamixel_goal_positions_;
+  for (int i = 0; i < dynamixel_goal_positions_buff_.size(); i++) {
+    std::cout << "dynamixel_goal_positions_buff_[" << i
+              << "]: " << dynamixel_goal_positions_buff_[i] << std::endl;
+  }
 }
 
 void MainWindow::on_buff_load_clicked() {
@@ -1000,6 +1033,8 @@ void MainWindow::oper_dynamixel_V(std::list<Step>::iterator it) {
   oper_dynamixel();
 
   for (int i = 0; i < dynamixel_goal_velocities_.size(); i++) {
+    std::cout << "dynamixel_goal_velocities_[" << i
+              << "]: " << dynamixel_goal_velocities_[i] << std::endl;
     dynamixel_goal_velocities_[i] = 0;
   }
 }
@@ -1140,7 +1175,7 @@ void MainWindow::on_save_step_init_clicked() {
   for (int i = 0; i < dynamixel_ctrl_->dynamixels.size(); i++) {
     Dynamixel_postition dxl;
     dxl.id = dynamixel_ctrl_->dynamixels[i]->get_id();
-    dxl.position = dynamixel_ctrl_->dynamixels[i]->get_present_position();
+    dxl.position = dynamixel_goal_positions_[i];
     init_step->dxl.push_back(dxl);
   }
 
@@ -1287,7 +1322,12 @@ void MainWindow::loadMotionFromYaml(const std::string &fileName) {
   // YAML 파일의 motor id와 현재 활성화된 motor id 비교
   std::vector<int> file_motor_ids = file[1]["motor id"].as<std::vector<int>>();
   std::vector<int> current_motor_ids;
+  std::cout << "file_motor_ids.size(): " << file_motor_ids.size() << std::endl;
+  std::cout << "current_motor_ids.size(): "
+            << dynamixel_ctrl_->dynamixels.size() << std::endl;
   for (int i = 0; i < dynamixel_ctrl_->dynamixels.size(); i++) {
+    std::cout << "dynamixel_ctrl_->dynamixels[i]->get_id(): "
+              << dynamixel_ctrl_->dynamixels[i]->get_id() << std::endl;
     current_motor_ids.push_back(
         static_cast<int>(dynamixel_ctrl_->dynamixels[i]->get_id()));
   }

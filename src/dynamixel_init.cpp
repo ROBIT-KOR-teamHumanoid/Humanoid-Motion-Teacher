@@ -16,21 +16,17 @@
 
 #include "../include/Humanoid-Motion-Teacher/dynamixel_init.hpp"
 
-namespace humanoid
-{
-DynamixelInit::DynamixelInit(std::string device_port) : device_port_(device_port)
-{
-}
+namespace humanoid {
+DynamixelInit::DynamixelInit(std::string device_port)
+    : device_port_(device_port) {}
 
-DynamixelInit::~DynamixelInit()
-{
+DynamixelInit::~DynamixelInit() {
   portHandler_->closePort();
   portHandler_ = nullptr;
   packetHandler_ = nullptr;
 }
 
-bool DynamixelInit::init_sdk()
-{
+bool DynamixelInit::init_sdk() {
   portHandler_ = dynamixel::PortHandler::getPortHandler(device_port_.c_str());
   packetHandler_ = dynamixel::PacketHandler::getPacketHandler(2.0);
 
@@ -44,12 +40,16 @@ bool DynamixelInit::init_sdk()
   return true;
 }
 
-bool DynamixelInit::ping_dynamixel(uint8_t id)
-{
+bool DynamixelInit::ping_dynamixel(uint8_t id) {
   uint8_t dxl_error = 0;
   int dxl_comm_result = packetHandler_->ping(portHandler_, id, &dxl_error);
   if (dxl_comm_result != COMM_SUCCESS) {
+    std::cout << "[Dynamixel] Ping failed for ID " << static_cast<int>(id)
+              << std::endl;
     return false;
+  } else {
+    std::cout << "[Dynamixel] Ping success for ID " << static_cast<int>(id)
+              << std::endl;
   }
   return true;
 }
