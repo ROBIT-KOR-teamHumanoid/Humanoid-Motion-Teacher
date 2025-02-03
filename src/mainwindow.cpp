@@ -1300,7 +1300,7 @@ void MainWindow::saveMotionToYaml(const std::string &fileName,
     out << YAML::Key << "delay" << YAML::Value << current_step->delay;
     out << YAML::Key << "repeat" << YAML::Value << current_step->repeat;
     out << YAML::Key << "name" << YAML::Value << current_step->name;
-    out << YAML::Key << "selected" << YAML::Value << current_step->selected;
+    out << YAML::Key << "selected" << YAML::Value << false;
     out << YAML::Key << "dxl" << YAML::Value << YAML::BeginSeq;
     for (const auto &dxl : current_step->dxl) {
       out << YAML::BeginMap;
