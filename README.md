@@ -19,4 +19,7 @@ make
 ```
 
 ## how to use
+
+tip.zip 파일에 pdf가 존재한다. pdf는 motion-teacher와 motion-operator 사용 tip과 모션 예시 영상이 들어가 있다.
+
 [Robit_Humanoid_Motion_Teacher_v2.pptx](https://github.com/user-attachments/files/18498512/Robit_Humanoid_Motion_Teacher_v2.pptx)
