@@ -24,7 +24,8 @@ pdf는 motion-teacher와 motion-operator 사용 tip이다.
 
 ppt는 ui 관련 사용법이다.
 
-[Motion-TeacherMotion-Operator.pdf](https://github.com/user-attachments/files/23298317/Motion-TeacherMotion-Operator.pdf)
+
+[Motion-TeacherMotion-Operator.pdf](https://github.com/user-attachments/files/23744035/Motion-TeacherMotion-Operator.pdf)
 
 [Robit_Humanoid_Motion_Teacher_v2.pptx](https://github.com/user-attachments/files/18498512/Robit_Humanoid_Motion_Teacher_v2.pptx)
 
