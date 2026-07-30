@@ -126,7 +126,9 @@ void MainWindow::init_dynamixel_ctrl() {
     std::cout << "Setup Dynamixel control" << std::endl;
   }
 
-  complete_connection();
+  if (!complete_connection()) {
+    cleanup_search();
+  }
 }
 
 bool MainWindow::validate_range_settings() {
@@ -149,6 +151,7 @@ void MainWindow::setup_ui_for_search() {
 
 bool MainWindow::init_dynamixel_sdk() {
   if (dynamixel_init_ != nullptr) {
+    delete dynamixel_init_;
     dynamixel_init_ = nullptr;
   }
 
@@ -230,6 +233,8 @@ void MainWindow::store_dynamixel_info(uint8_t id) {
 
 bool MainWindow::setup_dynamixel_control() {
   try {
+    delete dynamixel_ctrl_;
+    dynamixel_ctrl_ = nullptr;
     dynamixel_ctrl_ = new humanoid::DynamixelCtrl(
         ui->serialdevice->currentText().toStdString(), 1000000, dynamixel_ids_,
         dynamixel_types_, max_position_limit_, min_position_limit_);
@@ -246,20 +251,62 @@ bool MainWindow::setup_dynamixel_control() {
   }
 }
 
-void MainWindow::complete_connection() {
+bool MainWindow::complete_connection() {
+  try {
+    dynamixel_ctrl_->set_torque(true);
+  } catch (const std::exception &e) {
+    QMessageBox::critical(
+        this, tr("Connection failed"),
+        tr("Failed to enable Dynamixel torque.\n%1").arg(e.what()));
+    is_connected = false;
+    ui->connect->setEnabled(true);
+    ui->connect->setText("Connect");
+    ui->serialdevice->setEnabled(true);
+    return false;
+  }
+
   is_connected = true;
+  communication_error_shown_ = false;
   ui->connect->setStyleSheet("color: green;");
   ui->connect->setText("Disconnect");
   ui->serialdevice->setDisabled(true);
   ui->connect->setEnabled(true);
-  dynamixel_ctrl_->set_torque(true);
   dynamixel_status_timer_->start(100);
+  return true;
 }
 
 void MainWindow::cleanup_search() {
   delete dynamixel_init_;
   dynamixel_init_ = nullptr;
   ui->connect->setEnabled(true);
+}
+
+bool MainWindow::is_dynamixel_ready() const {
+  return is_connected && dynamixel_ctrl_ != nullptr;
+}
+
+void MainWindow::handle_communication_error(const QString &message) {
+  is_connected = false;
+  dynamixel_status_timer_->stop();
+  ui->connect->setText("Reconnect");
+  ui->connect->setStyleSheet("color: red;");
+  ui->serialdevice->setEnabled(true);
+
+  if (communication_error_shown_) {
+    return;
+  }
+
+  communication_error_shown_ = true;
+  QMessageBox::critical(
+      this, tr("Dynamixel connection lost"),
+      tr("Dynamixel communication failed. Motor commands have been stopped.\n"
+         "The motion can still be saved.\n\n%1")
+          .arg(message));
+}
+
+bool MainWindow::validate_step_number(int step_number) const {
+  return step_number >= 1 &&
+         step_number <= static_cast<int>(steps.size());
 }
 
 void MainWindow::setup_dynamixel_table() {
@@ -500,6 +547,9 @@ void MainWindow::on_connect_clicked() {
     setup_dynamixel_table();
   } else {
     init_dynamixel_ctrl();
+    if (!is_dynamixel_ready()) {
+      return;
+    }
     for (int i = 0; i < dynamixel_buttons_.size(); i++) {
       if (std::find(dynamixel_ids_.begin(), dynamixel_ids_.end(), i) ==
           dynamixel_ids_.end()) {
@@ -518,6 +568,11 @@ void MainWindow::on_connect_clicked() {
 }
 
 void MainWindow::on_dynamixel_pos_ctrl_valueChanged(int value) {
+  if (!is_dynamixel_ready()) {
+    before_value = value;
+    return;
+  }
+
   for (auto &s : selected_dynamixels) {
     if (s.plus) {
       dynamixel_goal_positions_[s.number] +=
@@ -541,13 +596,7 @@ void MainWindow::on_dynamixel_pos_ctrl_valueChanged(int value) {
 }
 
 void MainWindow::on_motor_set_clicked() {
-  try {
-    dynamixel_ctrl_->sync_write(dynamixel_goal_positions_,
-                                dynamixel_goal_velocities_,
-                                dynamixel_goal_accelerations_);
-  } catch (const std::runtime_error &e) {
-    QMessageBox::critical(this, "Error", e.what());
-  }
+  oper_dynamixel();
 }
 
 void MainWindow::on_motor_set_step_clicked() {}
@@ -714,6 +763,10 @@ void MainWindow::dynamixel_status_timeout() {
 }
 
 void MainWindow::dynamixel_selected(int id) {
+  if (!is_dynamixel_ready()) {
+    return;
+  }
+
   bool erase = false;
   for (int i = 0; i < selected_dynamixels.size(); i++) {
     if (selected_dynamixels[i].id == id) {
@@ -779,6 +832,10 @@ void MainWindow::dynamixel_selected(int id) {
 }
 
 void MainWindow::dynamixel_selected_R(int id) {
+  if (!is_dynamixel_ready()) {
+    return;
+  }
+
   bool erase = false;
 
   for (int i = 0; i < selected_dynamixels.size(); i++) {
@@ -847,6 +904,10 @@ void MainWindow::dynamixel_selected_R(int id) {
 void MainWindow::on_reset_button_clicked() {
   selected_dynamixels.clear();
 
+  if (!is_dynamixel_ready()) {
+    return;
+  }
+
   for (int i = 0; i < dynamixel_buttons_.size(); i++) {
     for (int j = 0; j < dynamixel_ctrl_->dynamixels.size(); j++) {
       if (dynamixel_ctrl_->dynamixels[j]->get_id() == i) {
@@ -860,6 +921,12 @@ void MainWindow::on_reset_button_clicked() {
 }
 
 void MainWindow::on_save_step_clicked() {
+  if (!is_dynamixel_ready()) {
+    QMessageBox::warning(this, tr("Dynamixel not connected"),
+                         tr("Connect Dynamixel before saving a new step."));
+    return;
+  }
+
   Step step;
   step.time = ui->step_time->toPlainText().toInt();
   step.delay = ui->step_delay->toPlainText().toInt();
@@ -901,17 +968,23 @@ void MainWindow::on_delete_step_clicked() {
 }
 
 void MainWindow::on_select_step_clicked() {
-  std::list<Step>::iterator it = steps.begin();
-
-  if (ui->step_spinbox->value() == 0) {
-    for (int i = 0; i < steps.size(); i++) {
-      it++;
-    }
-  } else {
-    for (int i = 0; i < ui->step_spinbox->value() - 1; i++) {
-      it++;
-    }
+  const int step_number = ui->step_spinbox->value();
+  if (!validate_step_number(step_number)) {
+    QMessageBox::warning(
+        this, tr("Invalid step"),
+        tr("Step number must be between 1 and %1.")
+            .arg(static_cast<int>(steps.size())));
+    return;
   }
+
+  if (!is_dynamixel_ready()) {
+    QMessageBox::warning(this, tr("Dynamixel not connected"),
+                         tr("Connect Dynamixel before operating a step."));
+    return;
+  }
+
+  std::list<Step>::iterator it = steps.begin();
+  std::advance(it, step_number - 1);
 
   oper_dynamixel_V(it);
 
@@ -943,11 +1016,23 @@ void MainWindow::on_select_step_clicked() {
 }
 
 void MainWindow::on_change_step_clicked() {
-  std::list<Step>::iterator it = steps.begin();
-
-  for (int i = 0; i < ui->step_spinbox->value() - 1; i++) {
-    it++;
+  const int step_number = ui->step_spinbox->value();
+  if (!validate_step_number(step_number)) {
+    QMessageBox::warning(
+        this, tr("Invalid step"),
+        tr("Step number must be between 1 and %1.")
+            .arg(static_cast<int>(steps.size())));
+    return;
   }
+
+  if (!is_dynamixel_ready()) {
+    QMessageBox::warning(this, tr("Dynamixel not connected"),
+                         tr("Connect Dynamixel before changing a step."));
+    return;
+  }
+
+  std::list<Step>::iterator it = steps.begin();
+  std::advance(it, step_number - 1);
 
   Step step;
   step.time = ui->step_time->toPlainText().toInt();
@@ -985,6 +1070,14 @@ void MainWindow::on_buff_save_clicked() {
 }
 
 void MainWindow::on_buff_load_clicked() {
+  if (!is_dynamixel_ready() ||
+      dynamixel_goal_positions_buff_.size() !=
+          dynamixel_goal_positions_.size()) {
+    QMessageBox::warning(this, tr("Invalid buffered position"),
+                         tr("No compatible buffered motor position exists."));
+    return;
+  }
+
   dynamixel_goal_positions_ = dynamixel_goal_positions_buff_;
 
   oper_dynamixel();
@@ -998,16 +1091,30 @@ void MainWindow::on_buff_load_clicked() {
 }
 
 void MainWindow::oper_dynamixel() {
+  if (!is_dynamixel_ready()) {
+    return;
+  }
+
   try {
     dynamixel_ctrl_->sync_write(dynamixel_goal_positions_,
                                 dynamixel_goal_velocities_,
                                 dynamixel_goal_accelerations_);
-  } catch (const std::runtime_error &e) {
-    QMessageBox::critical(this, "Error", e.what());
+  } catch (const std::exception &e) {
+    handle_communication_error(QString::fromUtf8(e.what()));
   }
 }
 
 void MainWindow::oper_dynamixel_V(std::list<Step>::iterator it) {
+  if (!is_dynamixel_ready() || it == steps.end()) {
+    return;
+  }
+
+  if (it->time <= 0) {
+    QMessageBox::warning(this, tr("Invalid step time"),
+                         tr("Step time must be greater than 0 ms."));
+    return;
+  }
+
   for (int i = 0; i < dynamixel_ctrl_->dynamixels.size(); i++) {
     for (int j = 0; j < it->dxl.size(); j++) {
       if (dynamixel_ctrl_->dynamixels[i]->get_id() == it->dxl[j].id) {
@@ -1114,6 +1221,18 @@ void MainWindow::on_step_init_clicked() {
     return;
   }
 
+  if (!is_dynamixel_ready()) {
+    QMessageBox::warning(this, tr("Dynamixel not connected"),
+                         tr("Connect Dynamixel before operating init step."));
+    return;
+  }
+
+  if (init_step->time <= 0) {
+    QMessageBox::warning(this, tr("Invalid step time"),
+                         tr("Init step time must be greater than 0 ms."));
+    return;
+  }
+
   Step step;
   step.time = init_step->time;
   step.delay = init_step->delay;
@@ -1165,6 +1284,12 @@ void MainWindow::on_step_init_clicked() {
 }
 
 void MainWindow::on_save_step_init_clicked() {
+  if (!is_dynamixel_ready()) {
+    QMessageBox::warning(this, tr("Dynamixel not connected"),
+                         tr("Connect Dynamixel before saving init step."));
+    return;
+  }
+
   init_step.reset(new Step);
 
   init_step->time = ui->step_time->toPlainText().toInt();
@@ -1188,6 +1313,12 @@ void MainWindow::on_motion_operate_clicked() {
     return;
   }
 
+  if (!is_dynamixel_ready()) {
+    QMessageBox::warning(this, tr("Dynamixel not connected"),
+                         tr("Connect Dynamixel before operating motion."));
+    return;
+  }
+
   oper_motion();
 }
 
@@ -1196,6 +1327,9 @@ void MainWindow::oper_motion() {
 
   for (int i = 0; i < steps.size(); i++) {
     oper_dynamixel_V(it);
+    if (!is_dynamixel_ready()) {
+      return;
+    }
     std::cout << "time : " << it->time << " delay : " << it->delay
               << " repeat : " << it->repeat << std::endl;
 
@@ -1214,16 +1348,16 @@ void MainWindow::saveMotionFile() { saveMotionToYaml(file_path, steps, true); }
 void MainWindow::saveMotionFileas() {  // 파일 저장 대화상자 표시
   QString fileName = QFileDialog::getSaveFileName(this, tr("Save File"), "",
                                                   tr("Files (*.*)"));
-  if (!fileName.isEmpty()) {
-    // 파일 저장 처리 코드
-    QMessageBox::information(this, tr("File Saved"),
-                             tr("File saved successfully: %1").arg(fileName));
+  if (fileName.isEmpty()) {
+    return;
   }
 
   saveMotionToYaml(fileName.toStdString(), steps, true);
 
-  file_path = ui->file_path->text().toStdString();
+  file_path = fileName.toStdString();
   ui->file_path->setText(fileName);
+  QMessageBox::information(this, tr("File Saved"),
+                           tr("File saved successfully: %1").arg(fileName));
 }
 
 void MainWindow::saveStepFile() { saveMotionToYaml(file_path, steps, false); }
@@ -1231,16 +1365,16 @@ void MainWindow::saveStepFile() { saveMotionToYaml(file_path, steps, false); }
 void MainWindow::saveStepFileas() {
   QString fileName = QFileDialog::getSaveFileName(this, tr("Save File"), "",
                                                   tr("Files (*.*)"));
-  if (!fileName.isEmpty()) {
-    // 파일 저장 처리 코드
-    QMessageBox::information(this, tr("File Saved"),
-                             tr("File saved successfully: %1").arg(fileName));
+  if (fileName.isEmpty()) {
+    return;
   }
 
   saveMotionToYaml(fileName.toStdString(), steps, false);
 
-  file_path = ui->file_path->text().toStdString();
+  file_path = fileName.toStdString();
   ui->file_path->setText(fileName);
+  QMessageBox::information(this, tr("File Saved"),
+                           tr("File saved successfully: %1").arg(fileName));
 }
 
 void MainWindow::loadFile() {  // 파일 열기 대화상자 표시
@@ -1248,12 +1382,36 @@ void MainWindow::loadFile() {  // 파일 열기 대화상자 표시
       this, tr("Open File"), "", tr("YAML Files (*.yaml);;All Files (*)"));
   if (!fileName.isEmpty()) {
     // 선택된 파일을 loadMotionFromYaml 함수로 전달
-    loadMotionFromYaml(fileName.toStdString());
+    try {
+      loadMotionFromYaml(fileName.toStdString());
+    } catch (const YAML::Exception &e) {
+      QMessageBox::critical(this, tr("Load failed"),
+                            QString::fromUtf8(e.what()));
+    } catch (const std::exception &e) {
+      QMessageBox::critical(this, tr("Load failed"),
+                            QString::fromUtf8(e.what()));
+    }
   }
 }
 
 void MainWindow::saveMotionToYaml(const std::string &fileName,
                                   const std::list<Step> &steps, bool motion) {
+  if (fileName.empty()) {
+    return;
+  }
+
+  if (dynamixel_ctrl_ == nullptr) {
+    QMessageBox::warning(this, tr("Save failed"),
+                         tr("No Dynamixel configuration is available."));
+    return;
+  }
+
+  if (!motion && current_step == nullptr) {
+    QMessageBox::warning(this, tr("Save failed"),
+                         tr("No step is selected."));
+    return;
+  }
+
   std::string name = ui->motion_name->toPlainText().toStdString();
 
   YAML::Emitter out;
@@ -1319,20 +1477,27 @@ void MainWindow::saveMotionToYaml(const std::string &fileName,
 void MainWindow::loadMotionFromYaml(const std::string &fileName) {
   YAML::Node file = YAML::LoadFile(fileName);
 
+  if (!file.IsSequence() || file.size() < 3 || !file[1]["motor id"] ||
+      !file[2]["type"]) {
+    throw std::runtime_error("Invalid motion YAML format");
+  }
+
   // YAML 파일의 motor id와 현재 활성화된 motor id 비교
   std::vector<int> file_motor_ids = file[1]["motor id"].as<std::vector<int>>();
   std::vector<int> current_motor_ids;
   std::cout << "file_motor_ids.size(): " << file_motor_ids.size() << std::endl;
-  std::cout << "current_motor_ids.size(): "
-            << dynamixel_ctrl_->dynamixels.size() << std::endl;
-  for (int i = 0; i < dynamixel_ctrl_->dynamixels.size(); i++) {
-    std::cout << "dynamixel_ctrl_->dynamixels[i]->get_id(): "
-              << dynamixel_ctrl_->dynamixels[i]->get_id() << std::endl;
-    current_motor_ids.push_back(
-        static_cast<int>(dynamixel_ctrl_->dynamixels[i]->get_id()));
+  if (dynamixel_ctrl_ != nullptr) {
+    std::cout << "current_motor_ids.size(): "
+              << dynamixel_ctrl_->dynamixels.size() << std::endl;
+    for (int i = 0; i < dynamixel_ctrl_->dynamixels.size(); i++) {
+      std::cout << "dynamixel_ctrl_->dynamixels[i]->get_id(): "
+                << dynamixel_ctrl_->dynamixels[i]->get_id() << std::endl;
+      current_motor_ids.push_back(
+          static_cast<int>(dynamixel_ctrl_->dynamixels[i]->get_id()));
+    }
   }
 
-  if (file_motor_ids != current_motor_ids) {
+  if (!current_motor_ids.empty() && file_motor_ids != current_motor_ids) {
     QMessageBox::critical(
         this, tr("Error"),
         tr("호환되지 않는 모션입니다. Dynamixel ID를 확인해주세요."));

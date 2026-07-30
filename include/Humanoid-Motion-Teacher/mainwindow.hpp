@@ -80,8 +80,11 @@ class MainWindow : public QMainWindow {
   void update_search_progress(uint8_t id);
   void store_dynamixel_info(uint8_t id);
   bool setup_dynamixel_control();
-  void complete_connection();
+  bool complete_connection();
   void cleanup_search();
+  bool is_dynamixel_ready() const;
+  void handle_communication_error(const QString &message);
+  bool validate_step_number(int step_number) const;
 
   void setup_dynamixel_table();
 
@@ -131,8 +134,8 @@ class MainWindow : public QMainWindow {
 
  private:
   Ui::MainWindow *ui;
-  humanoid::DynamixelInit *dynamixel_init_;
-  humanoid::DynamixelCtrl *dynamixel_ctrl_;
+  humanoid::DynamixelInit *dynamixel_init_ = nullptr;
+  humanoid::DynamixelCtrl *dynamixel_ctrl_ = nullptr;
 
   bool is_connected = false;
   std::vector<uint8_t> dynamixel_ids_;
@@ -140,7 +143,8 @@ class MainWindow : public QMainWindow {
   std::vector<double> max_position_limit_;
   std::vector<double> min_position_limit_;
 
-  QTimer *dynamixel_status_timer_;
+  QTimer *dynamixel_status_timer_ = nullptr;
+  bool communication_error_shown_ = false;
 
   std::vector<QLabel *> dynamixel_labels_;
   std::vector<QPushButton *> dynamixel_buttons_;
@@ -154,7 +158,7 @@ class MainWindow : public QMainWindow {
 
   std::vector<double> dynamixel_goal_positions_buff_;
 
-  Step *current_step;
+  Step *current_step = nullptr;
   std::vector<Dynamixel_postition> dxl_positions;
 
   std::list<Step> steps;

@@ -2771,7 +2771,7 @@ color: rgb(0, 0, 0)</string>
     <string>Save Step File</string>
    </property>
    <property name="menuRole">
-    <enum>QAction::MenuRole::TextHeuristicRole</enum>
+    <enum>QAction::TextHeuristicRole</enum>
    </property>
   </action>
   <action name="actionSaveStepFileas">
@@ -2789,7 +2789,7 @@ color: rgb(0, 0, 0)</string>
     <string>Save Step File as</string>
    </property>
    <property name="menuRole">
-    <enum>QAction::MenuRole::TextHeuristicRole</enum>
+    <enum>QAction::TextHeuristicRole</enum>
    </property>
   </action>
   <action name="actionOpen_Step_file">
