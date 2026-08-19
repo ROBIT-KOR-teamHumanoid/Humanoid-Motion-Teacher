@@ -71,6 +71,7 @@ class MainWindow : public QMainWindow {
 
  private:
   std::vector<std::string> get_serial_devices();
+  void load_motor_config();
   void init_dynamixel_ctrl();
 
   bool validate_range_settings();
@@ -138,6 +139,8 @@ class MainWindow : public QMainWindow {
   humanoid::DynamixelCtrl *dynamixel_ctrl_ = nullptr;
 
   bool is_connected = false;
+  int motor_baud_rate_ = DEFAULT_BAUDRATE;
+  std::string configured_port_ = "/dev/ttyUSB-U2D2";
   std::vector<uint8_t> dynamixel_ids_;
   std::vector<humanoid::DynamixelType> dynamixel_types_;
   std::vector<double> max_position_limit_;

@@ -17,11 +17,13 @@
 #include "../include/Humanoid-Motion-Teacher/dynamixel_init.hpp"
 
 namespace humanoid {
-DynamixelInit::DynamixelInit(std::string device_port)
-    : device_port_(device_port) {}
+DynamixelInit::DynamixelInit(std::string device_port, int baud_rate)
+    : device_port_(device_port), baud_rate_(baud_rate) {}
 
 DynamixelInit::~DynamixelInit() {
-  portHandler_->closePort();
+  if (portHandler_ != nullptr) {
+    portHandler_->closePort();
+  }
   portHandler_ = nullptr;
   packetHandler_ = nullptr;
 }
@@ -34,7 +36,7 @@ bool DynamixelInit::init_sdk() {
     throw std::runtime_error("Failed to open port");
   }
 
-  if (!portHandler_->setBaudRate(DEFAULT_BAUDRATE)) {
+  if (!portHandler_->setBaudRate(baud_rate_)) {
     throw std::runtime_error("Failed to set baudrate");
   }
   return true;

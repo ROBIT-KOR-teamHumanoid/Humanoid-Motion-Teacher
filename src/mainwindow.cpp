@@ -31,16 +31,21 @@ MainWindow::MainWindow(QWidget *parent)
     ui->serialdevice->addItem(QString::fromStdString(port));
   }
 
-  const int preferred_port_index =
-      ui->serialdevice->findText("/dev/ttyUSB-U2D2");
-  if (preferred_port_index >= 0) {
-    ui->serialdevice->setCurrentIndex(preferred_port_index);
-  }
-
   ui->min_range->setValue(0);
   ui->max_range->setValue(6);
   ui->min_range_2->setValue(10);
   ui->max_range_2->setValue(23);
+  load_motor_config();
+
+  const QString configured_port = QString::fromStdString(configured_port_);
+  int preferred_port_index = ui->serialdevice->findText(configured_port);
+  if (preferred_port_index < 0 && !configured_port.isEmpty()) {
+    ui->serialdevice->addItem(configured_port);
+    preferred_port_index = ui->serialdevice->findText(configured_port);
+  }
+  if (preferred_port_index >= 0) {
+    ui->serialdevice->setCurrentIndex(preferred_port_index);
+  }
 
   setup_dynamixel_table();
   init_dynamixel_buttons();
@@ -102,6 +107,43 @@ std::vector<std::string> MainWindow::get_serial_devices() {
   }
 
   return available_ports;
+}
+
+void MainWindow::load_motor_config() {
+  try {
+    const YAML::Node config = YAML::LoadFile(MOTOR_CONFIG_FILE);
+    const YAML::Node motor = config["motor"];
+    if (!motor || !motor["port"] || !motor["baud_rate"] ||
+        !motor["id_ranges"] || !motor["id_ranges"].IsSequence() ||
+        motor["id_ranges"].size() != 2) {
+      throw std::runtime_error("Required motor settings are missing");
+    }
+
+    const int baud_rate = motor["baud_rate"].as<int>();
+    const int range1_start = motor["id_ranges"][0]["start"].as<int>();
+    const int range1_end = motor["id_ranges"][0]["end"].as<int>();
+    const int range2_start = motor["id_ranges"][1]["start"].as<int>();
+    const int range2_end = motor["id_ranges"][1]["end"].as<int>();
+    const auto valid_id = [](int id) { return id >= 0 && id <= 25; };
+
+    if (baud_rate <= 0 || !valid_id(range1_start) || !valid_id(range1_end) ||
+        !valid_id(range2_start) || !valid_id(range2_end) ||
+        range1_start > range1_end || range2_start > range2_end) {
+      throw std::runtime_error("Invalid baud rate or ID range (valid IDs: 0-25)");
+    }
+
+    configured_port_ = motor["port"].as<std::string>();
+    motor_baud_rate_ = baud_rate;
+    ui->min_range->setValue(range1_start);
+    ui->max_range->setValue(range1_end);
+    ui->min_range_2->setValue(range2_start);
+    ui->max_range_2->setValue(range2_end);
+  } catch (const std::exception &e) {
+    QMessageBox::warning(
+        this, "Motor configuration",
+        QString("Could not load %1\n%2\nUsing default motor settings.")
+            .arg(MOTOR_CONFIG_FILE, e.what()));
+  }
 }
 
 void MainWindow::init_dynamixel_ctrl() {
@@ -175,7 +217,7 @@ bool MainWindow::init_dynamixel_sdk() {
   }
 
   dynamixel_init_ = new humanoid::DynamixelInit(
-      ui->serialdevice->currentText().toStdString());
+      ui->serialdevice->currentText().toStdString(), motor_baud_rate_);
 
   try {
     dynamixel_init_->init_sdk();
@@ -263,7 +305,7 @@ bool MainWindow::setup_dynamixel_control() {
     delete dynamixel_ctrl_;
     dynamixel_ctrl_ = nullptr;
     dynamixel_ctrl_ = new humanoid::DynamixelCtrl(
-        ui->serialdevice->currentText().toStdString(), DEFAULT_BAUDRATE, dynamixel_ids_,
+        ui->serialdevice->currentText().toStdString(), motor_baud_rate_, dynamixel_ids_,
         dynamixel_types_, max_position_limit_, min_position_limit_);
     dynamixel_goal_positions_.resize(dynamixel_ids_.size(), 0);
     dynamixel_goal_velocities_.resize(dynamixel_ids_.size(), 0);

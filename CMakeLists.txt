@@ -65,6 +65,8 @@ endif()
 
 # Add the executable
 add_executable(${PROJECT_NAME} ${SOURCES} ${MOC_SOURCES} ${UIC_SOURCES} ${RESOURCE_SOURCES})
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    MOTOR_CONFIG_FILE="${CMAKE_CURRENT_SOURCE_DIR}/config/motor.yaml")
 
 # Link the appropriate Qt Widgets library
 if(QT_VERSION_MAJOR EQUAL 6)
