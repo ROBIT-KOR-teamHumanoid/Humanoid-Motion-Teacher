@@ -37,7 +37,10 @@ MainWindow::MainWindow(QWidget *parent)
     ui->serialdevice->setCurrentIndex(preferred_port_index);
   }
 
-  ui->max_range->setValue(22);
+  ui->min_range->setValue(0);
+  ui->max_range->setValue(6);
+  ui->min_range_2->setValue(10);
+  ui->max_range_2->setValue(23);
 
   setup_dynamixel_table();
   init_dynamixel_buttons();
@@ -139,7 +142,13 @@ void MainWindow::init_dynamixel_ctrl() {
 
 bool MainWindow::validate_range_settings() {
   if (ui->min_range->value() > ui->max_range->value()) {
-    QMessageBox::critical(this, "Error", "Min range is greater than max range");
+    QMessageBox::critical(this, "Error",
+                          "Range 1 start ID is greater than its end ID");
+    return false;
+  }
+  if (ui->min_range_2->value() > ui->max_range_2->value()) {
+    QMessageBox::critical(this, "Error",
+                          "Range 2 start ID is greater than its end ID");
     return false;
   }
   return true;
@@ -150,7 +159,11 @@ void MainWindow::setup_ui_for_search() {
   ui->connect->setText("Searching...");
   ui->connect->setStyleSheet("color: white;");
 
-  ui->search_process->setRange(ui->min_range->value(), ui->max_range->value());
+  const int first_range_size =
+      ui->max_range->value() - ui->min_range->value() + 1;
+  const int second_range_size =
+      ui->max_range_2->value() - ui->min_range_2->value() + 1;
+  ui->search_process->setRange(0, first_range_size + second_range_size);
   ui->search_process->setValue(0);
   ui->search_process->setVisible(true);
 }
@@ -185,13 +198,25 @@ bool MainWindow::search_dynamixels() {
   dynamixel_goal_velocities_.clear();
   dynamixel_goal_accelerations_.clear();
 
-  const std::vector<uint8_t> configured_ids = {
-      0, 1, 2, 3, 4, 5,
-      10, 11, 12, 13, 14, 15, 16,
-      17, 18, 19, 20, 21, 22};
+  std::vector<uint8_t> configured_ids;
+  const auto append_range = [&configured_ids](int first, int last) {
+    for (int id = first; id <= last; ++id) {
+      const auto value = static_cast<uint8_t>(id);
+      if (std::find(configured_ids.begin(), configured_ids.end(), value) ==
+          configured_ids.end()) {
+        configured_ids.push_back(value);
+      }
+    }
+  };
 
+  // Both end IDs are inclusive. Overlapping ranges are searched only once.
+  append_range(ui->min_range->value(), ui->max_range->value());
+  append_range(ui->min_range_2->value(), ui->max_range_2->value());
+
+  int progress = 0;
+  ui->search_process->setRange(0, static_cast<int>(configured_ids.size()));
   for (const uint8_t id : configured_ids) {
-    update_search_progress(id);
+    update_search_progress(id, ++progress);
     if (dynamixel_init_->ping_dynamixel(id)) {
       store_dynamixel_info(id);
     }
@@ -213,8 +238,8 @@ bool MainWindow::search_dynamixels() {
   return true;
 }
 
-void MainWindow::update_search_progress(uint8_t id) {
-  ui->search_process->setValue(id);
+void MainWindow::update_search_progress(uint8_t id, int progress) {
+  ui->search_process->setValue(progress);
   ui->search_stat->setText("Searching ID: " +
                            QString::number(static_cast<int>(id)));
   QApplication::processEvents();

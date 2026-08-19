@@ -77,7 +77,7 @@ class MainWindow : public QMainWindow {
   void setup_ui_for_search();
   bool init_dynamixel_sdk();
   bool search_dynamixels();
-  void update_search_progress(uint8_t id);
+  void update_search_progress(uint8_t id, int progress);
   void store_dynamixel_info(uint8_t id);
   bool setup_dynamixel_control();
   bool complete_connection();
