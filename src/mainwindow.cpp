@@ -31,6 +31,12 @@ MainWindow::MainWindow(QWidget *parent)
     ui->serialdevice->addItem(QString::fromStdString(port));
   }
 
+  const int preferred_port_index =
+      ui->serialdevice->findText("/dev/ttyUSB-U2D2");
+  if (preferred_port_index >= 0) {
+    ui->serialdevice->setCurrentIndex(preferred_port_index);
+  }
+
   ui->max_range->setValue(22);
 
   setup_dynamixel_table();
@@ -179,26 +185,17 @@ bool MainWindow::search_dynamixels() {
   dynamixel_goal_velocities_.clear();
   dynamixel_goal_accelerations_.clear();
 
-  // TODO: Dynamixel ID search with file stream
-  store_dynamixel_info(0);
-  store_dynamixel_info(1);
-  store_dynamixel_info(2);
-  store_dynamixel_info(3);
-  store_dynamixel_info(4);
-  store_dynamixel_info(5);
-  store_dynamixel_info(10);
-  store_dynamixel_info(11);
-  store_dynamixel_info(12);
-  store_dynamixel_info(13);
-  store_dynamixel_info(14);
-  store_dynamixel_info(15);
-  store_dynamixel_info(16);
-  store_dynamixel_info(17);
-  store_dynamixel_info(18);
-  store_dynamixel_info(19);
-  store_dynamixel_info(20);
-  store_dynamixel_info(21);
-  store_dynamixel_info(22);
+  const std::vector<uint8_t> configured_ids = {
+      0, 1, 2, 3, 4, 5,
+      10, 11, 12, 13, 14, 15, 16,
+      17, 18, 19, 20, 21, 22};
+
+  for (const uint8_t id : configured_ids) {
+    update_search_progress(id);
+    if (dynamixel_init_->ping_dynamixel(id)) {
+      store_dynamixel_info(id);
+    }
+  }
 
   if (dynamixel_ids_.empty()) {
     QMessageBox::critical(this, "Error", "No Dynamixel found");
@@ -209,11 +206,11 @@ bool MainWindow::search_dynamixels() {
   QMessageBox::information(
       this, "Success",
       "Found " + QString::number(dynamixel_ids_.size()) + " devices");
-  return true;
 
   dynamixel_goal_positions_.resize(dynamixel_ids_.size(), 0);
   dynamixel_goal_velocities_.resize(dynamixel_ids_.size(), 0);
   dynamixel_goal_accelerations_.resize(dynamixel_ids_.size(), 0);
+  return true;
 }
 
 void MainWindow::update_search_progress(uint8_t id) {
@@ -233,10 +230,15 @@ void MainWindow::store_dynamixel_info(uint8_t id) {
 
 bool MainWindow::setup_dynamixel_control() {
   try {
+    // Release the discovery connection before opening the same serial device
+    // for normal motor control.
+    delete dynamixel_init_;
+    dynamixel_init_ = nullptr;
+
     delete dynamixel_ctrl_;
     dynamixel_ctrl_ = nullptr;
     dynamixel_ctrl_ = new humanoid::DynamixelCtrl(
-        ui->serialdevice->currentText().toStdString(), 1000000, dynamixel_ids_,
+        ui->serialdevice->currentText().toStdString(), DEFAULT_BAUDRATE, dynamixel_ids_,
         dynamixel_types_, max_position_limit_, min_position_limit_);
     dynamixel_goal_positions_.resize(dynamixel_ids_.size(), 0);
     dynamixel_goal_velocities_.resize(dynamixel_ids_.size(), 0);

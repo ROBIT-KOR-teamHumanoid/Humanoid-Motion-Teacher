@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#define DEFAULT_BAUDRATE 1000000
+#define DEFAULT_BAUDRATE 4500000
 #define SEARCH_ID_END 254
 
 namespace humanoid
