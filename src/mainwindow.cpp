@@ -378,6 +378,53 @@ bool MainWindow::validate_step_number(int step_number) const {
          step_number <= static_cast<int>(steps.size());
 }
 
+bool MainWindow::parse_step_selection(const QString &selection,
+                                      std::vector<int> *step_numbers,
+                                      QString *error) const {
+  step_numbers->clear();
+  const QString normalized = selection.trimmed().toLower();
+  if (normalized == "all") {
+    for (int step = 1; step <= static_cast<int>(steps.size()); ++step) {
+      step_numbers->push_back(step);
+    }
+    return true;
+  }
+
+  const QStringList parts = normalized.split(',', Qt::SkipEmptyParts);
+  for (const QString &raw_part : parts) {
+    const QString part = raw_part.trimmed();
+    const QStringList range = part.split('-');
+    bool start_ok = false;
+    bool end_ok = false;
+    const int start = range.value(0).trimmed().toInt(&start_ok);
+    const int end = range.size() == 1
+                        ? start
+                        : range.value(1).trimmed().toInt(&end_ok);
+    if (range.size() == 1) end_ok = start_ok;
+
+    if (range.size() > 2 || !start_ok || !end_ok || start > end ||
+        !validate_step_number(start) || !validate_step_number(end)) {
+      *error = tr("'%1' is invalid. Use step numbers/ranges such as "
+                  "1,3,5-8, or enter all.")
+                   .arg(part);
+      return false;
+    }
+    for (int step = start; step <= end; ++step) {
+      if (std::find(step_numbers->begin(), step_numbers->end(), step) ==
+          step_numbers->end()) {
+        step_numbers->push_back(step);
+      }
+    }
+  }
+
+  if (step_numbers->empty()) {
+    *error = tr("Enter at least one step number, range, or all.");
+    return false;
+  }
+  std::sort(step_numbers->begin(), step_numbers->end());
+  return true;
+}
+
 void MainWindow::setup_dynamixel_table() {
   QStringList header;
   header << "ID"
@@ -1128,6 +1175,114 @@ void MainWindow::on_change_step_clicked() {
 
   it--;
   current_step = &(*it);
+}
+
+void MainWindow::on_apply_step_delta_clicked() {
+  const int source_step_number = ui->step_spinbox->value();
+  if (!validate_step_number(source_step_number)) {
+    QMessageBox::warning(this, tr("Invalid source step"),
+                         tr("Select a source step between 1 and %1 first.")
+                             .arg(static_cast<int>(steps.size())));
+    return;
+  }
+  if (!is_dynamixel_ready()) {
+    QMessageBox::warning(this, tr("Dynamixel not connected"),
+                         tr("Connect Dynamixel before applying motor changes."));
+    return;
+  }
+
+  auto source = steps.begin();
+  std::advance(source, source_step_number - 1);
+  struct MotorDelta {
+    uint8_t id;
+    double value;
+  };
+  std::vector<MotorDelta> deltas;
+  for (size_t motor_index = 0;
+       motor_index < dynamixel_ctrl_->dynamixels.size(); ++motor_index) {
+    const uint8_t id = dynamixel_ctrl_->dynamixels[motor_index]->get_id();
+    const auto saved = std::find_if(
+        source->dxl.begin(), source->dxl.end(),
+        [id](const Dynamixel_postition &position) { return position.id == id; });
+    if (saved == source->dxl.end()) continue;
+
+    const double delta = dynamixel_goal_positions_[motor_index] - saved->position;
+    if (std::fabs(delta) > 1e-9) deltas.push_back({id, delta});
+  }
+
+  if (deltas.empty()) {
+    QMessageBox::information(
+        this, tr("No motor changes"),
+        tr("The current motor positions do not differ from source step %1.")
+            .arg(source_step_number));
+    return;
+  }
+
+  bool accepted = false;
+  const QString selection = QInputDialog::getText(
+      this, tr("Apply motor changes"),
+      tr("Target steps (example: 1,3,5-8 or all):"), QLineEdit::Normal,
+      "all", &accepted);
+  if (!accepted) return;
+
+  std::vector<int> target_steps;
+  QString parse_error;
+  if (!parse_step_selection(selection, &target_steps, &parse_error)) {
+    QMessageBox::warning(this, tr("Invalid target steps"), parse_error);
+    return;
+  }
+
+  // Validate every resulting position first so the operation is atomic.
+  for (int step_number : target_steps) {
+    auto target = steps.begin();
+    std::advance(target, step_number - 1);
+    for (const MotorDelta &delta : deltas) {
+      const auto position = std::find_if(
+          target->dxl.begin(), target->dxl.end(),
+          [&delta](const Dynamixel_postition &item) {
+            return item.id == delta.id;
+          });
+      if (position == target->dxl.end()) continue;
+
+      const auto motor = std::find_if(
+          dynamixel_ctrl_->dynamixels.begin(),
+          dynamixel_ctrl_->dynamixels.end(),
+          [&delta](const auto &item) { return item->get_id() == delta.id; });
+      if (motor == dynamixel_ctrl_->dynamixels.end()) continue;
+      const size_t motor_index =
+          std::distance(dynamixel_ctrl_->dynamixels.begin(), motor);
+      const double result = position->position + delta.value;
+      if (result < min_position_limit_[motor_index] ||
+          result > max_position_limit_[motor_index]) {
+        QMessageBox::warning(
+            this, tr("Motor limit exceeded"),
+            tr("Step %1, motor %2 would become %3 degrees. No steps were changed.")
+                .arg(step_number)
+                .arg(delta.id)
+                .arg(RAD2DEG(result), 0, 'f', 2));
+        return;
+      }
+    }
+  }
+
+  for (int step_number : target_steps) {
+    auto target = steps.begin();
+    std::advance(target, step_number - 1);
+    for (const MotorDelta &delta : deltas) {
+      const auto position = std::find_if(
+          target->dxl.begin(), target->dxl.end(),
+          [&delta](const Dynamixel_postition &item) {
+            return item.id == delta.id;
+          });
+      if (position != target->dxl.end()) position->position += delta.value;
+    }
+  }
+
+  QMessageBox::information(
+      this, tr("Motor changes applied"),
+      tr("Applied changes for %1 motor(s) to %2 step(s).")
+          .arg(static_cast<int>(deltas.size()))
+          .arg(static_cast<int>(target_steps.size())));
 }
 
 void MainWindow::on_buff_save_clicked() {

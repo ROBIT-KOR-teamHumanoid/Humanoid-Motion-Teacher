@@ -23,9 +23,12 @@
 #include <QAction>
 #include <QColor>
 #include <QFileDialog>
+#include <QInputDialog>
 #include <QMainWindow>
 #include <QMessageBox>
 #include <QTimer>
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -86,6 +89,9 @@ class MainWindow : public QMainWindow {
   bool is_dynamixel_ready() const;
   void handle_communication_error(const QString &message);
   bool validate_step_number(int step_number) const;
+  bool parse_step_selection(const QString &selection,
+                            std::vector<int> *step_numbers,
+                            QString *error) const;
 
   void setup_dynamixel_table();
 
@@ -110,6 +116,7 @@ class MainWindow : public QMainWindow {
   void on_delete_step_clicked();
   void on_select_step_clicked();
   void on_change_step_clicked();
+  void on_apply_step_delta_clicked();
 
   void on_buff_save_clicked();
   void on_buff_load_clicked();

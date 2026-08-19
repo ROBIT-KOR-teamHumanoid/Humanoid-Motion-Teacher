@@ -337,7 +337,7 @@ border-radius: 10px;
       <rect>
        <x>10</x>
        <y>90</y>
-       <width>231</width>
+       <width>151</width>
        <height>31</height>
       </rect>
      </property>
@@ -439,9 +439,9 @@ Step</string>
     <widget class="QPushButton" name="save_step_init">
      <property name="geometry">
       <rect>
-       <x>260</x>
+      <x>180</x>
        <y>90</y>
-       <width>231</width>
+       <width>151</width>
        <height>31</height>
       </rect>
      </property>
@@ -452,6 +452,27 @@ border-radius: 10px;
      </property>
      <property name="text">
       <string>SAVE INIT</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="apply_step_delta">
+     <property name="geometry">
+      <rect>
+       <x>360</x>
+       <y>90</y>
+       <width>131</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgbrgb(0, 0, 0);
+border-radius: 10px;
+</string>
+     </property>
+     <property name="toolTip">
+      <string>Apply motor changes from the selected source step to multiple steps</string>
+     </property>
+     <property name="text">
+      <string>APPLY DELTA</string>
      </property>
     </widget>
    </widget>

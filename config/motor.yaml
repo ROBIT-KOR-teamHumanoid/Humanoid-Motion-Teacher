@@ -2,7 +2,7 @@
 # Both start and end IDs are included in the search.
 motor:
   port: /dev/ttyUSB-U2D2
-  baud_rate: 4500000  # bps
+  baud_rate: 3000000  # bps
   id_ranges:
     - start: 0
       end: 6
