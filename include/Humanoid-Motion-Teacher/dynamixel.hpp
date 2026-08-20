@@ -31,6 +31,7 @@
 #define MX_RPS_PROFILE 0.229     // [rev/min]
 #define MX_ACC_PROFILE 214.577   // [rev/min^2]
 #define MX_CURRENT_PROFILE 3.36  // [mA]
+#define XH_CURRENT_PROFILE 2.69  // [mA]
 
 // Dynamixel PRO Series Profile
 #define PRO_RPS_PROFILE 0.01   // [rev/min]
@@ -55,6 +56,8 @@ namespace humanoid {
 
 enum DynamixelType {
   MX,
+  MX28,
+  XH,
   PH54_200,
   PH54_100,
   PH42_020,
@@ -92,11 +95,15 @@ class Dynamixel {
  public:
   DynamixelType type;
   uint8_t id;
+  uint16_t model_number;
+  std::string model_name;
   double min_rad, max_rad;  // [rad]
   uint16_t dynamixel_indirect_address;
+  uint16_t dynamixel_indirect_data;
   double dxl_rps_ratio, dxl_acc_ratio, dxl_current_ratio;
 
   double max_velocity_limit = 45.00;  // [rev/min]
+  double load_limit = 100.0;          // mA, or percent for MX-28
 
   std::vector<uint8_t> dynamixel_addresses;
 
@@ -126,6 +133,8 @@ class Dynamixel {
 
   // Dynamixel Information Functions
   DynamixelType get_type() { return type; }
+  uint16_t get_model_number() const { return model_number; }
+  const std::string& get_model_name() const { return model_name; }
   int get_id() { return id; }
   std::pair<double, double> get_rad_limit() {
     return std::make_pair(min_rad, max_rad);
@@ -136,6 +145,10 @@ class Dynamixel {
   double get_present_position() { return present_position; }
   double get_present_velocity() { return present_velocity; }
   double get_present_current() { return present_current; }
+  bool has_current_feedback() const { return type != DynamixelType::MX28; }
+  double get_load_ratio() const {
+    return load_limit > 0.0 ? std::abs(present_current) / load_limit : 0.0;
+  }
   double get_present_voltage() { return present_voltage; }
   double get_present_temperature() { return present_temperature; }
 
@@ -143,8 +156,9 @@ class Dynamixel {
 
   // Dynamixel Control Functions
  public:
-  Dynamixel(DynamixelType type, uint8_t id, double min_rad = -M_PI,
-            double max_rad = M_PI);
+  Dynamixel(DynamixelType type, uint8_t id, uint16_t model_number = 0,
+            const std::string& model_name = "Unknown",
+            double min_rad = -M_PI, double max_rad = M_PI);
   ~Dynamixel();
 
   bool get_dynamixel_status(dynamixel::GroupSyncRead& SyncRead);
@@ -165,7 +179,7 @@ class Dynamixel {
 
   bool set_control_data_param(dynamixel::GroupSyncWrite& SyncWrite);
 
-  static uint16_t address(const uint16_t address);
+  uint16_t address(const uint16_t address) const;
 
   void reboot_sequence(dynamixel::PacketHandler* packet_handler,
                        dynamixel::PortHandler* port_handler);

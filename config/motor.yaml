@@ -3,6 +3,29 @@
 motor:
   port: /dev/ttyUSB-U2D2
   baud_rate: 3000000  # bps
+  # A single high-rate loop performs writes and every 10th-cycle status read.
+  write_hz: 100
+  read_hz: 10
+  # Minimum safe values accepted when saving, loading, or operating a step.
+  min_step_time_ms: 10
+  min_step_delay_ms: 10
+  # Number of complete step-list snapshots retained for Undo/Redo (1-50).
+  undo_history_limit: 20
+  # Left/right mirror pairs. direction is applied to the motion delta around
+  # the selected INIT pose. 22 and 23 are intentionally not mirrored.
+  mirror_pairs:
+    - {left: 1, right: 0, direction: 1}
+    - {left: 3, right: 2, direction: -1}
+    - {left: 5, right: 4, direction: -1}
+    - {left: 7, right: 6, direction: -1}
+    - {left: 9, right: 8, direction: -1}
+    - {left: 11, right: 10, direction: -1}
+    - {left: 13, right: 12, direction: -1}
+    - {left: 15, right: 14, direction: -1}
+    - {left: 17, right: 16, direction: -1}
+    - {left: 19, right: 18, direction: -1}
+    - {left: 21, right: 20, direction: -1}
+    - {left: 25, right: 24, direction: -1}
   id_ranges:
     - start: 0
       end: 6

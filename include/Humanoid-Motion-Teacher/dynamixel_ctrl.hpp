@@ -24,7 +24,9 @@
 // #include "dynamixel_rdk_msgs/msg/dynamixel_control_msgs.hpp"
 
 #include <iostream>
+#include <algorithm>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -35,6 +37,7 @@ class DynamixelCtrl
 public:  // Public Functions
   DynamixelCtrl(
     std::string device_port, int baud_rate, std::vector<uint8_t> dynamixel_ids,
+    std::vector<uint16_t> model_numbers, std::vector<std::string> model_names,
     std::vector<DynamixelType> dynamixel_types, std::vector<double> max_position_limit,
     std::vector<double> min_position_limit);
   ~DynamixelCtrl();
@@ -46,12 +49,17 @@ public:  // Public Functions
   bool set_single_torque(uint8_t id, bool torque);
 
   bool read_dynamixel_status();
+  bool communication_cycle(
+    const std::vector<double> * position = nullptr,
+    const std::vector<double> * velocity = nullptr,
+    const std::vector<double> * acceleration = nullptr, bool force_read = false);
   void sync_write(
     std::vector<double> position, std::vector<double> velocity, std::vector<double> acceleration);
 
   void auto_reboot();
 
   std::string get_reboot_sequence_str() const;
+  std::vector<uint8_t> find_disconnected_ids();
   std::string get_last_error() const { return last_error_; }
 
 public:  // Public Variables
@@ -63,6 +71,7 @@ private:  // Private Functions
   bool init_dynamixel_sdk();
   bool init_max_velocity_limit();
   bool init_indirect_address();
+  void init_load_limits();
 
   bool status();
 
@@ -70,6 +79,8 @@ private:  // Private Variables
   std::string device_port;
   int baud_rate;
   std::vector<uint8_t> dynamixel_ids;
+  std::vector<uint16_t> model_numbers;
+  std::vector<std::string> model_names;
   std::vector<DynamixelType> dynamixel_types;
   std::vector<double> max_position_limit;
   std::vector<double> min_position_limit;
@@ -77,6 +88,8 @@ private:  // Private Variables
   dynamixel::PacketHandler * packetHandler_;
 
   std::string last_error_;
+  std::chrono::steady_clock::time_point last_status_read_{};
+  std::mutex communication_mutex_;
 };
 }  // namespace humanoid
 

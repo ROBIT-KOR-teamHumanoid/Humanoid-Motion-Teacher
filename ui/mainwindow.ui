@@ -2493,9 +2493,9 @@ color: rgb(224, 27, 36)</string>
      <property name="geometry">
       <rect>
        <x>110</x>
-       <y>760</y>
+       <y>775</y>
        <width>101</width>
-       <height>61</height>
+       <height>46</height>
       </rect>
      </property>
      <property name="styleSheet">
@@ -2532,9 +2532,9 @@ color: rgb(224, 27, 36)</string>
      <property name="geometry">
       <rect>
        <x>110</x>
-       <y>700</y>
+       <y>730</y>
        <width>101</width>
-       <height>51</height>
+       <height>41</height>
       </rect>
      </property>
      <property name="styleSheet">
@@ -2551,7 +2551,7 @@ Save</string>
        <x>110</x>
        <y>640</y>
        <width>101</width>
-       <height>51</height>
+       <height>41</height>
       </rect>
      </property>
      <property name="styleSheet">
@@ -2560,6 +2560,26 @@ Save</string>
      <property name="text">
       <string>temp Value
 Load</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="set_all_zero">
+     <property name="geometry">
+      <rect>
+       <x>110</x>
+       <y>685</y>
+       <width>101</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(230, 126, 34); color: white;</string>
+     </property>
+     <property name="text">
+      <string>SET ALL
+ZERO</string>
+     </property>
+     <property name="toolTip">
+      <string>Move every connected motor to 0 degrees over 1000 ms</string>
      </property>
     </widget>
    </widget>

@@ -42,16 +42,19 @@ bool DynamixelInit::init_sdk() {
   return true;
 }
 
-bool DynamixelInit::ping_dynamixel(uint8_t id) {
+bool DynamixelInit::ping_dynamixel(uint8_t id, uint16_t *model_number) {
   uint8_t dxl_error = 0;
-  int dxl_comm_result = packetHandler_->ping(portHandler_, id, &dxl_error);
+  uint16_t detected_model = 0;
+  int dxl_comm_result =
+      packetHandler_->ping(portHandler_, id, &detected_model, &dxl_error);
   if (dxl_comm_result != COMM_SUCCESS) {
     std::cout << "[Dynamixel] Ping failed for ID " << static_cast<int>(id)
               << std::endl;
     return false;
   } else {
+    if (model_number != nullptr) *model_number = detected_model;
     std::cout << "[Dynamixel] Ping success for ID " << static_cast<int>(id)
-              << std::endl;
+              << ", model " << detected_model << std::endl;
   }
   return true;
 }

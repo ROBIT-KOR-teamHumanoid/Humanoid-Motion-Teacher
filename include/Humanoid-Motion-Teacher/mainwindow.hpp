@@ -23,13 +23,27 @@
 #include <QAction>
 #include <QColor>
 #include <QFileDialog>
+#include <QEventLoop>
 #include <QInputDialog>
 #include <QMainWindow>
 #include <QMessageBox>
+#include <QStatusBar>
+#include <QMenu>
+#include <QToolBar>
+#include <QToolButton>
+#include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QLineEdit>
+#include <QSettings>
+#include <QStyle>
+#include <QFileInfo>
 #include <QTimer>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <deque>
 #include <fstream>
 #include <iostream>
 #include <list>
@@ -59,6 +73,12 @@ struct Step {
   bool selected;
 };
 
+struct MirrorPair {
+  uint8_t left_id;
+  uint8_t right_id;
+  double direction;
+};
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -82,13 +102,26 @@ class MainWindow : public QMainWindow {
   bool init_dynamixel_sdk();
   bool search_dynamixels();
   void update_search_progress(uint8_t id, int progress);
-  void store_dynamixel_info(uint8_t id);
+  bool store_dynamixel_info(uint8_t id, uint16_t model_number);
   bool setup_dynamixel_control();
   bool complete_connection();
   void cleanup_search();
   bool is_dynamixel_ready() const;
   void handle_communication_error(const QString &message);
   bool validate_step_number(int step_number) const;
+  bool validate_step_timing(int time_ms, int delay_ms,
+                            const QString& step_name = QString());
+  void record_step_history();
+  void undo_step_edit();
+  void redo_step_edit();
+  void restore_current_step_pointer();
+  void select_step_for_edit(int zero_based_index);
+  void add_recent_motion(const QString& path);
+  void rebuild_recent_motion_menu();
+  bool open_motion_file(const QString& path);
+  QString next_copy_path(const QString& original) const;
+  void open_mirror_editor();
+  Step mirror_step(const Step& source, const Step& reference) const;
   bool parse_step_selection(const QString &selection,
                             std::vector<int> *step_numbers,
                             QString *error) const;
@@ -112,6 +145,7 @@ class MainWindow : public QMainWindow {
   void dynamixel_selected(int id);
   void dynamixel_selected_R(int id);
   void on_reset_button_clicked();
+  void on_set_all_zero_clicked();
   void on_save_step_clicked();
   void on_delete_step_clicked();
   void on_select_step_clicked();
@@ -147,13 +181,27 @@ class MainWindow : public QMainWindow {
 
   bool is_connected = false;
   int motor_baud_rate_ = DEFAULT_BAUDRATE;
+  int motor_write_hz_ = 100;
+  int motor_read_hz_ = 10;
+  int min_step_time_ms_ = 10;
+  int min_step_delay_ms_ = 10;
+  std::size_t undo_history_limit_ = 20;
+  std::vector<MirrorPair> mirror_pairs_;
+  int communication_cycle_count_ = 0;
+  bool motor_command_active_ = false;
   std::string configured_port_ = "/dev/ttyUSB-U2D2";
   std::vector<uint8_t> dynamixel_ids_;
+  std::vector<uint16_t> dynamixel_model_numbers_;
+  std::vector<std::string> dynamixel_model_names_;
   std::vector<humanoid::DynamixelType> dynamixel_types_;
   std::vector<double> max_position_limit_;
   std::vector<double> min_position_limit_;
 
   QTimer *dynamixel_status_timer_ = nullptr;
+  QTimer *temp_load_timer_ = nullptr;
+  std::vector<double> temp_load_start_positions_;
+  std::vector<double> temp_load_target_positions_;
+  int temp_load_elapsed_ms_ = 0;
   bool communication_error_shown_ = false;
 
   std::vector<QLabel *> dynamixel_labels_;
@@ -165,6 +213,9 @@ class MainWindow : public QMainWindow {
   std::vector<double> dynamixel_goal_positions_;
   std::vector<double> dynamixel_goal_velocities_;
   std::vector<double> dynamixel_goal_accelerations_;
+  std::vector<double> pending_goal_positions_;
+  std::vector<double> pending_goal_velocities_;
+  std::vector<double> pending_goal_accelerations_;
 
   std::vector<double> dynamixel_goal_positions_buff_;
 
@@ -172,9 +223,13 @@ class MainWindow : public QMainWindow {
   std::vector<Dynamixel_postition> dxl_positions;
 
   std::list<Step> steps;
+  std::deque<std::list<Step>> undo_step_history_;
+  std::deque<std::list<Step>> redo_step_history_;
   std::unique_ptr<Step> init_step;
 
-  std::string file_path = "../Workspace/";
+  std::string file_path;
+  QMenu *recent_motion_menu_ = nullptr;
+  QStringList recent_motion_files_;
 
   int before_value = 0;
 };

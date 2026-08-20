@@ -18,7 +18,7 @@ public:
   ~DynamixelInit();
 
   bool init_sdk();
-  bool ping_dynamixel(uint8_t id);
+  bool ping_dynamixel(uint8_t id, uint16_t * model_number = nullptr);
 
 private:
   std::string device_port_;

@@ -3,15 +3,18 @@
 namespace humanoid {
 
 std::vector<std::string> dynamixel_type_str = {
-    "MX",       "PH54_200", "PH54_100", "PH42_020",
+    "MX", "MX28", "XH", "PH54_200", "PH54_100", "PH42_020",
     "PM54_060", "PM54_040", "PM42_010"};
 
-Dynamixel::Dynamixel(DynamixelType type, uint8_t id, double min_rad,
+Dynamixel::Dynamixel(DynamixelType type, uint8_t id, uint16_t model_number,
+                     const std::string& model_name, double min_rad,
                      double max_rad)
-    : type(type), id(id), min_rad(min_rad), max_rad(max_rad) {
+    : type(type), id(id), model_number(model_number), model_name(model_name),
+      min_rad(min_rad), max_rad(max_rad) {
   dynamixel_addresses.clear();
-  if (type == DynamixelType::MX) {
+  if (type == DynamixelType::MX || type == DynamixelType::MX28) {
     dynamixel_indirect_address = MX_INDIRECT_ADDRESS_START;
+    dynamixel_indirect_data = 634;
     add_address(MXRAM::TORQUE_ENABLE);
     add_address(MXRAM::HARDWARE_ERROR_STATUS);
     add_address(MXRAM::PROFILE_ACCELERATION);
@@ -23,8 +26,27 @@ Dynamixel::Dynamixel(DynamixelType type, uint8_t id, double min_rad,
     add_address(MXRAM::PRESENT_POSITION);
     add_address(MXRAM::PRESENT_INPUT_VOLTAGE);
     add_address(MXRAM::PRESENT_TEMPERATURE);
-    dxl_current_ratio = MX_CURRENT_PROFILE;
+    // MX-28(2.0) exposes inferred Present Load (0.1 %) at address 126,
+    // while MX-64/106 expose measured Present Current at the same address.
+    dxl_current_ratio = type == DynamixelType::MX28 ? 0.1 : MX_CURRENT_PROFILE;
     dxl_rps_ratio = MX_RPS_PROFILE * M_PI / 30;  //  RPM TO rad/s
+    dxl_acc_ratio = MX_ACC_PROFILE * M_PI / 1800;
+  } else if (type == DynamixelType::XH) {
+    dynamixel_indirect_address = 168;
+    dynamixel_indirect_data = 224;
+    add_address(MXRAM::TORQUE_ENABLE);
+    add_address(MXRAM::HARDWARE_ERROR_STATUS);
+    add_address(MXRAM::PROFILE_ACCELERATION);
+    add_address(MXRAM::PROFILE_VELOCITY);
+    add_address(MXRAM::GOAL_POSITION);
+    add_address(MXRAM::MOVING);
+    add_address(MXRAM::PRESENT_CURRENT);
+    add_address(MXRAM::PRESENT_VELOCITY);
+    add_address(MXRAM::PRESENT_POSITION);
+    add_address(MXRAM::PRESENT_INPUT_VOLTAGE);
+    add_address(MXRAM::PRESENT_TEMPERATURE);
+    dxl_current_ratio = XH_CURRENT_PROFILE;
+    dxl_rps_ratio = MX_RPS_PROFILE * M_PI / 30;
     dxl_acc_ratio = MX_ACC_PROFILE * M_PI / 1800;
   } else if (type == DynamixelType::PH54_200 ||
              type == DynamixelType::PH54_100 ||
@@ -33,6 +55,7 @@ Dynamixel::Dynamixel(DynamixelType type, uint8_t id, double min_rad,
              type == DynamixelType::PM54_040 ||
              type == DynamixelType::PM42_010) {
     dynamixel_indirect_address = PRO_INDIRECT_ADDRESS_START;
+    dynamixel_indirect_data = 634;
     add_address(PRORAM::TORQUE_ENABLE);
     add_address(PRORAM::HARDWARE_ERROR_STATUS);
     add_address(PRORAM::PROFILE_ACCELERATION);
@@ -113,14 +136,13 @@ bool Dynamixel::get_dynamixel_status(dynamixel::GroupSyncRead& SyncRead) {
   present_position = to_rad(present_position_raw);
   present_velocity = present_velocity_raw * dxl_rps_ratio;
   present_current =
-      -(int16_t)SyncRead.getData(id, address(PRESENT_CURRENT), 2) /
+      static_cast<int16_t>(SyncRead.getData(id, address(PRESENT_CURRENT), 2)) *
       dxl_current_ratio;
   present_voltage =
       SyncRead.getData(id, address(PRESENT_INPUT_VOLTAGE), 2) * 0.1;
   present_temperature =
       (int16_t)SyncRead.getData(id, address(PRESENT_TEMPERATURE), 1);
 
-  int error_status_int = static_cast<int>(error_status);
   // if (error_status_int != 0 && reboot_seq_ ==
   // DynamixelRebootSequence::STABLE) {
   //   std::cerr << "[Dynamixel] Got error on ID: " << static_cast<int>(id)
@@ -221,7 +243,9 @@ bool Dynamixel::set_control_data_param(dynamixel::GroupSyncWrite& SyncWrite) {
     velocity_data = 0;
   } else {
     velocity_data = static_cast<int>(profile_velocity / dxl_rps_ratio);
-    if (velocity_data < 0) {
+    // Protocol 2.0 interprets profile velocity 0 as unlimited velocity.
+    // Preserve deliberately slow, non-zero commands after integer rounding.
+    if (velocity_data <= 0) {
       velocity_data = 1;
     }
   }
@@ -346,8 +370,8 @@ void Dynamixel::add_address(const std::pair<int, int>& control_table) {
   }
 }
 
-uint16_t Dynamixel::address(const uint16_t address) {
-  return INDIRECT_DATA_START + address;
+uint16_t Dynamixel::address(const uint16_t address) const {
+  return dynamixel_indirect_data + address;
 }
 
 double Dynamixel::min_max_rad(int32_t min, int32_t max, int32_t position) {
@@ -358,6 +382,8 @@ double Dynamixel::min_max_rad(int32_t min, int32_t max, int32_t position) {
 double Dynamixel::to_rad(int32_t position) {
   switch (type) {
     case DynamixelType::MX:
+    case DynamixelType::MX28:
+    case DynamixelType::XH:
       return min_max_rad(0, MX_RESOLUTION, position);
     case DynamixelType::PH54_200:
       return min_max_rad(-PRO_PH54_RESOLUTION, PRO_PH54_RESOLUTION, position);
@@ -383,6 +409,8 @@ int32_t Dynamixel::min_max_position(int32_t min, int32_t max, double rad) {
 int32_t Dynamixel::to_position(double rad) {
   switch (type) {
     case DynamixelType::MX:
+    case DynamixelType::MX28:
+    case DynamixelType::XH:
       return min_max_position(0, MX_RESOLUTION, rad);
     case DynamixelType::PH54_200:
       return min_max_position(-PRO_PH54_RESOLUTION, PRO_PH54_RESOLUTION, rad);

@@ -20,12 +20,15 @@ namespace humanoid {
 
 DynamixelCtrl::DynamixelCtrl(std::string device_port, int baud_rate,
                              std::vector<uint8_t> dynamixel_ids,
+                             std::vector<uint16_t> model_numbers,
+                             std::vector<std::string> model_names,
                              std::vector<DynamixelType> dynamixel_types,
                              std::vector<double> max_position_limit,
                              std::vector<double> min_position_limit)
     : device_port(device_port),
       baud_rate(baud_rate),
       dynamixel_ids(dynamixel_ids),
+      model_numbers(model_numbers), model_names(model_names),
       dynamixel_types(dynamixel_types),
       max_position_limit(max_position_limit),
       min_position_limit(min_position_limit) {
@@ -46,13 +49,35 @@ DynamixelCtrl::DynamixelCtrl(std::string device_port, int baud_rate,
     throw std::runtime_error(
         "[DynamixelCtrl] Indirect address initialization failed");
   }
+  init_load_limits();
   controller_status = true;
 }
 
 DynamixelCtrl::~DynamixelCtrl() {
-  portHandler_->closePort();
-  delete portHandler_;
-  delete packetHandler_;
+  if (portHandler_ != nullptr) {
+    portHandler_->closePort();
+    delete portHandler_;
+    portHandler_ = nullptr;
+  }
+  // PacketHandler is an SDK singleton; deleting it breaks reconnection.
+  packetHandler_ = nullptr;
+}
+
+void DynamixelCtrl::init_load_limits() {
+  for (auto& motor : dynamixels) {
+    if (!motor->has_current_feedback()) {
+      motor->load_limit = 100.0;
+      continue;
+    }
+    uint16_t raw_limit = 0;
+    uint8_t error = 0;
+    const int result = packetHandler_->read2ByteTxRx(
+        portHandler_, motor->get_id(), EEPROM::CURRENT_LIMIT.first,
+        &raw_limit, &error);
+    if (result == COMM_SUCCESS && error == 0 && raw_limit > 0) {
+      motor->load_limit = raw_limit * motor->dxl_current_ratio;
+    }
+  }
 }
 
 bool DynamixelCtrl::init_dynamixel_sdk() {
@@ -63,14 +88,17 @@ bool DynamixelCtrl::init_dynamixel_sdk() {
             << std::endl;
   std::cout << "Device Port: " << device_port << std::endl;
   std::cout << "Baud Rate: " << baud_rate << std::endl;
-  if (dynamixel_ids.size() != dynamixel_types.size()) {
-    std::cerr << "Dynamixel ID and Type size mismatch" << std::endl;
+  if (dynamixel_ids.size() != dynamixel_types.size() ||
+      dynamixel_ids.size() != model_numbers.size() ||
+      dynamixel_ids.size() != model_names.size()) {
+    std::cerr << "Dynamixel discovery data size mismatch" << std::endl;
     return false;
   }
   std::cout << "Dynamixel ID Count: " << dynamixel_ids.size() << std::endl;
   for (size_t i = 0; i < dynamixel_ids.size(); i++) {
     dynamixels.push_back(std::make_shared<Dynamixel>(
-        dynamixel_types[i], dynamixel_ids[i], min_position_limit[i],
+        dynamixel_types[i], dynamixel_ids[i], model_numbers[i], model_names[i],
+        min_position_limit[i],
         max_position_limit[i]));
   }
   std::cout << "======================Port Handler====================="
@@ -278,25 +306,20 @@ bool DynamixelCtrl::init_single_indirect_address(uint8_t id) {
 }
 
 bool DynamixelCtrl::set_torque(bool torque) {
-  dynamixel::GroupSyncWrite SyncWrite(
-      portHandler_, packetHandler_,
-      Dynamixel::address(AddressNumber::TORQUE_ENABLE), 1);
-
-  for (auto& dynamixel : dynamixels) {
-    bool dxl_addparam_result = dynamixel->set_torque(SyncWrite, torque);
-    std::cout << "dxl_addparam_result" << dxl_addparam_result << std::endl;
-    if (!dxl_addparam_result) {
-      throw std::runtime_error(
-          "Failed to add parameter to sync write on Dynamixel ID: " +
-          std::to_string(dynamixel->get_id()));
+  for (const uint16_t base : {static_cast<uint16_t>(224), static_cast<uint16_t>(634)}) {
+    dynamixel::GroupSyncWrite sync_write(portHandler_, packetHandler_, base, 1);
+    bool has_params = false;
+    for (auto& motor : dynamixels) {
+      if (motor->address(AddressNumber::TORQUE_ENABLE) != base) continue;
+      has_params = true;
+      if (!motor->set_torque(sync_write, torque)) {
+        throw std::runtime_error("Failed to add torque for ID: " +
+                                 std::to_string(motor->get_id()));
+      }
     }
-  }
-
-  int dxl_comm_result = SyncWrite.txPacket();
-  std::cout << "\ndxl_comm_result:" << dxl_comm_result << std::endl;
-  if (dxl_comm_result == COMM_SUCCESS) {
-  } else {
-    throw std::runtime_error("Failed to set torque");
+    if (has_params && sync_write.txPacket() != COMM_SUCCESS) {
+      throw std::runtime_error("Failed to set torque");
+    }
   }
   return true;
 }
@@ -304,7 +327,7 @@ bool DynamixelCtrl::set_torque(bool torque) {
 bool DynamixelCtrl::set_single_torque(uint8_t id, bool torque) {
   dynamixel::GroupSyncWrite SyncWrite(
       portHandler_, packetHandler_,
-      Dynamixel::address(AddressNumber::TORQUE_ENABLE), 1);
+      dynamixels[id]->address(AddressNumber::TORQUE_ENABLE), 1);
 
   bool dxl_addparam_result = dynamixels[id]->set_torque(SyncWrite, torque);
   if (!dxl_addparam_result) {
@@ -322,39 +345,30 @@ bool DynamixelCtrl::set_single_torque(uint8_t id, bool torque) {
 }
 
 bool DynamixelCtrl::read_dynamixel_status() {
-  dynamixel::GroupSyncRead SyncRead(
-      portHandler_, packetHandler_,
-      Dynamixel::address(AddressNumber::TORQUE_ENABLE), READ_LENGTH);
-
-  for (auto& dynamixel : dynamixels) {
-    bool dxl_addparam_result = SyncRead.addParam(dynamixel->get_id());
-    if (!dxl_addparam_result) {
-      throw std::runtime_error(
-          "1 Failed to add parameter to sync read on Dynamixel ID: " +
-          std::to_string(dynamixel->get_id()));
-    }
-  }
-
-  int dxl_comm_result = SyncRead.txRxPacket();
-  if (dxl_comm_result == COMM_SUCCESS) {
-    for (auto& dynamixel : dynamixels) {
-      if (!dynamixel->get_dynamixel_status(SyncRead) ||
-          dynamixel->get_reboot_sequence() != DynamixelRebootSequence::STABLE) {
-        if (dynamixel->get_reboot_sequence() ==
-            DynamixelRebootSequence::STABLE) {
-          // dynamixel->reboot_seq_ = DynamixelRebootSequence::REBOOT_START;
-        }
-        throw std::runtime_error("Failed to get dynamixel status on ID: " +
-                                 std::to_string(dynamixel->get_id()));
+  for (const uint16_t base : {static_cast<uint16_t>(224), static_cast<uint16_t>(634)}) {
+    dynamixel::GroupSyncRead sync_read(portHandler_, packetHandler_, base, READ_LENGTH);
+    bool has_params = false;
+    for (auto& motor : dynamixels) {
+      if (motor->address(AddressNumber::TORQUE_ENABLE) != base) continue;
+      has_params = true;
+      if (!sync_read.addParam(motor->get_id())) {
+        throw std::runtime_error("Failed to add status read for ID: " +
+                                 std::to_string(motor->get_id()));
       }
     }
-  } else {
-    for (auto& dynamixel : dynamixels) {
-      // dynamixel->reboot_seq_ = DynamixelRebootSequence::REBOOT_START;
+    if (!has_params) continue;
+    const int result = sync_read.txRxPacket();
+    if (result != COMM_SUCCESS) {
+      throw std::runtime_error("Failed to read Dynamixel status. Error Code: " +
+                               std::to_string(result));
     }
-    throw std::runtime_error("Failed to get dynamixel status. Error Code: " +
-                             std::to_string(dxl_comm_result) +
-                             " Check your connection.");
+    for (auto& motor : dynamixels) {
+      if (motor->address(AddressNumber::TORQUE_ENABLE) == base &&
+          !motor->get_dynamixel_status(sync_read)) {
+        throw std::runtime_error("Failed to get status for ID: " +
+                                 std::to_string(motor->get_id()));
+        }
+    }
   }
   return true;
 }
@@ -362,25 +376,70 @@ bool DynamixelCtrl::read_dynamixel_status() {
 void DynamixelCtrl::sync_write(std::vector<double> position,
                                std::vector<double> velocity,
                                std::vector<double> acceleration) {
-  dynamixel::GroupSyncWrite SyncWrite(
-      portHandler_, packetHandler_,
-      Dynamixel::address(AddressNumber::PROFILE_ACCELERATION), 12);
-
   for (size_t i = 0; i < dynamixels.size(); i++) {
     dynamixels[i]->set_control_data(position[i], velocity[i], acceleration[i]);
-    bool dxl_addparam_result = dynamixels[i]->set_control_data_param(SyncWrite);
-    if (!dxl_addparam_result) {
-      throw std::runtime_error(
-          "Failed to add parameter to sync write on Dynamixel ID: " +
-          std::to_string(dynamixels[i]->get_id()));
+  }
+  for (const uint16_t base : {static_cast<uint16_t>(226), static_cast<uint16_t>(636)}) {
+    dynamixel::GroupSyncWrite sync_write(portHandler_, packetHandler_, base, 12);
+    bool has_params = false;
+    for (auto& motor : dynamixels) {
+      if (motor->address(AddressNumber::PROFILE_ACCELERATION) != base) continue;
+      has_params = true;
+      if (!motor->set_control_data_param(sync_write)) {
+        throw std::runtime_error("Failed to add command for ID: " +
+                                 std::to_string(motor->get_id()));
+      }
+    }
+    if (has_params && sync_write.txPacket() != COMM_SUCCESS) {
+      throw std::runtime_error("Failed to set goal position");
     }
   }
+}
 
-  int dxl_comm_result = SyncWrite.txPacket();
-  if (dxl_comm_result == COMM_SUCCESS) {
-  } else {
-    throw std::runtime_error("Failed to set goal position");
+bool DynamixelCtrl::communication_cycle(
+    const std::vector<double> *position, const std::vector<double> *velocity,
+    const std::vector<double> *acceleration, bool force_read) {
+  std::lock_guard<std::mutex> lock(communication_mutex_);
+  if (position != nullptr) {
+    if (velocity == nullptr || acceleration == nullptr) return false;
+    sync_write(*position, *velocity, *acceleration);
   }
+  if (force_read) {
+    read_dynamixel_status();
+    last_status_read_ = std::chrono::steady_clock::now();
+  }
+  return true;
+}
+
+std::vector<uint8_t> DynamixelCtrl::find_disconnected_ids() {
+  std::lock_guard<std::mutex> lock(communication_mutex_);
+  std::vector<uint8_t> missing;
+  // Diagnose one ID at a time. With many actuators at 3 Mbps, Broadcast Ping
+  // responses can overlap and produce COMM_RX_CORRUPT (-3002), making every
+  // configured motor look disconnected.
+  portHandler_->clearPort();
+  for (const auto& motor : dynamixels) {
+    bool responded = false;
+    for (int attempt = 0; attempt < 3; ++attempt) {
+      portHandler_->clearPort();
+      uint8_t device_error = 0;
+      uint16_t model_number = 0;
+      const int result = packetHandler_->ping(
+          portHandler_, motor->get_id(), &model_number, &device_error);
+      // device_error reports an actuator hardware alert. It must not be used
+      // as evidence of a broken serial connection: a valid status packet was
+      // received whenever the communication result is COMM_SUCCESS.
+      if (result == COMM_SUCCESS) {
+        responded = true;
+        break;
+      }
+    }
+    if (!responded) {
+      missing.push_back(static_cast<uint8_t>(motor->get_id()));
+    }
+  }
+  portHandler_->clearPort();
+  return missing;
 }
 
 void DynamixelCtrl::auto_reboot() {
