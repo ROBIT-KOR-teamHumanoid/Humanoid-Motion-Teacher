@@ -28,6 +28,8 @@ ppt는 ui 관련 사용법이다.
 [Motion-TeacherMotion-Operator.pdf](https://github.com/user-attachments/files/23744035/Motion-TeacherMotion-Operator.pdf)
 
 [Robit_Humanoid_Motion_Teacher_v2.pptx](https://github.com/user-attachments/files/18498512/Robit_Humanoid_Motion_Teacher_v2.pptx)
+현재 --> [Robit_Humanoid_Motion_Teacher_v3.pptx](https://github.com/user-attachments/files/31286715/Robit_Humanoid_Motion_Teacher_v3.pptx)
+
 
 ![허들 모션 예시1](motion_gif/hurdle1.gif)
 ![허들 모션 예시2](motion_gif/hurdle2.gif)
