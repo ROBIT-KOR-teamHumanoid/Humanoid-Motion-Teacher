@@ -107,10 +107,13 @@ class MainWindow : public QMainWindow {
   bool complete_connection();
   void cleanup_search();
   bool is_dynamixel_ready() const;
-  void handle_communication_error(const QString &message);
+  void handle_communication_error(
+      const QString &message,
+      const std::vector<uint8_t> &disconnected_ids);
   bool validate_step_number(int step_number) const;
   bool validate_step_timing(int time_ms, int delay_ms,
                             const QString& step_name = QString());
+  bool is_step_timing_valid(int time_ms, int delay_ms) const;
   void record_step_history();
   void undo_step_edit();
   void redo_step_edit();
@@ -183,6 +186,7 @@ class MainWindow : public QMainWindow {
   int motor_baud_rate_ = DEFAULT_BAUDRATE;
   int motor_write_hz_ = 100;
   int motor_read_hz_ = 10;
+  std::string motor_mode_ = "teacher";
   int min_step_time_ms_ = 10;
   int min_step_delay_ms_ = 10;
   std::size_t undo_history_limit_ = 20;

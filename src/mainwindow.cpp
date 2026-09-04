@@ -194,6 +194,9 @@ void MainWindow::load_motor_config() {
     const int baud_rate = motor["baud_rate"].as<int>();
     const int write_hz = motor["write_hz"].as<int>();
     const int read_hz = motor["read_hz"].as<int>();
+    const std::string mode = motor["mode"]
+                                 ? motor["mode"].as<std::string>()
+                                 : "teacher";
     const int min_step_time_ms = motor["min_step_time_ms"].as<int>();
     const int min_step_delay_ms = motor["min_step_delay_ms"].as<int>();
     const int undo_history_limit = motor["undo_history_limit"].as<int>();
@@ -205,13 +208,16 @@ void MainWindow::load_motor_config() {
 
     if (baud_rate <= 0 || write_hz <= 0 || write_hz > 1000 ||
         read_hz <= 0 || write_hz != read_hz * 10 ||
-        min_step_time_ms <= 0 || min_step_delay_ms <= 0 ||
+        (mode != "teacher" && mode != "dancew") ||
+        min_step_time_ms <= 0 || min_step_delay_ms < 0 ||
+        (mode != "dancew" && min_step_delay_ms == 0) ||
         undo_history_limit <= 0 || undo_history_limit > 50 ||
         !valid_id(range1_start) || !valid_id(range1_end) ||
         !valid_id(range2_start) || !valid_id(range2_end) ||
         range1_start > range1_end || range2_start > range2_end) {
       throw std::runtime_error(
-          "Invalid settings: write_hz must be 10 x read_hz (max 1000 Hz), "
+          "Invalid settings: mode must be teacher or dancew, write_hz must "
+          "be 10 x read_hz (max 1000 Hz), "
           "undo_history_limit must be 1-50, and valid IDs are 0-25");
     }
 
@@ -219,6 +225,7 @@ void MainWindow::load_motor_config() {
     motor_baud_rate_ = baud_rate;
     motor_write_hz_ = write_hz;
     motor_read_hz_ = read_hz;
+    motor_mode_ = mode;
     min_step_time_ms_ = min_step_time_ms;
     min_step_delay_ms_ = min_step_delay_ms;
     undo_history_limit_ = static_cast<std::size_t>(undo_history_limit);
@@ -515,7 +522,9 @@ bool MainWindow::is_dynamixel_ready() const {
   return is_connected && dynamixel_ctrl_ != nullptr;
 }
 
-void MainWindow::handle_communication_error(const QString &message) {
+void MainWindow::handle_communication_error(
+    const QString &message,
+    const std::vector<uint8_t> &disconnected_ids) {
   is_connected = false;
   motor_command_active_ = false;
   dynamixel_status_timer_->stop();
@@ -531,7 +540,9 @@ void MainWindow::handle_communication_error(const QString &message) {
   communication_error_shown_ = true;
   QString disconnected = tr("diagnosis unavailable");
   if (dynamixel_ctrl_ != nullptr) {
-    const auto ids = dynamixel_ctrl_->find_disconnected_ids();
+    const auto ids = disconnected_ids.empty()
+                         ? dynamixel_ctrl_->find_disconnected_ids()
+                         : disconnected_ids;
     if (!ids.empty()) {
       QStringList values;
       for (const uint8_t id : ids) {
@@ -561,7 +572,7 @@ bool MainWindow::validate_step_number(int step_number) const {
 
 bool MainWindow::validate_step_timing(int time_ms, int delay_ms,
                                       const QString& step_name) {
-  if (time_ms >= min_step_time_ms_ && delay_ms >= min_step_delay_ms_) {
+  if (is_step_timing_valid(time_ms, delay_ms)) {
     return true;
   }
   const QString prefix = step_name.isEmpty() ? tr("Step") : step_name;
@@ -572,6 +583,11 @@ bool MainWindow::validate_step_timing(int time_ms, int delay_ms,
          "These limits can be changed in config/motor.yaml.")
           .arg(prefix).arg(min_step_time_ms_).arg(min_step_delay_ms_));
   return false;
+}
+
+bool MainWindow::is_step_timing_valid(int time_ms, int delay_ms) const {
+  const int minimum_delay = motor_mode_ == "dancew" ? 0 : min_step_delay_ms_;
+  return time_ms >= min_step_time_ms_ && delay_ms >= minimum_delay;
 }
 
 void MainWindow::record_step_history() {
@@ -993,7 +1009,15 @@ void MainWindow::dynamixel_status_timeout() {
     dynamixel_ctrl_->communication_cycle(positions, velocities, accelerations,
                                          read_due);
   } catch (const std::exception &e) {
-    handle_communication_error(e.what());
+    // A Group Sync Read can occasionally lose or corrupt one response even
+    // while every actuator is still online. Confirm the failure one ID at a
+    // time before changing the connection state, like Wizard's tolerant
+    // online check.
+    const auto disconnected_ids = dynamixel_ctrl_->find_disconnected_ids();
+    if (disconnected_ids.empty()) {
+      return;
+    }
+    handle_communication_error(e.what(), disconnected_ids);
     return;
   }
   if (!read_due) return;
@@ -2357,7 +2381,7 @@ void MainWindow::loadMotionFromYaml(const std::string &fileName) {
       step.repeat = file[i]["repeat"].as<int>();
       step.name = file[i]["name"].as<std::string>();
       step.selected = file[i]["selected"].as<bool>();
-      if (step.time < min_step_time_ms_ || step.delay < min_step_delay_ms_) {
+      if (!is_step_timing_valid(step.time, step.delay)) {
         throw std::runtime_error(
             "Motion file step " + std::to_string(i - 2) +
             " is below the configured minimum time/delay");
@@ -2379,7 +2403,7 @@ void MainWindow::loadMotionFromYaml(const std::string &fileName) {
       step.repeat = file[i]["repeat"].as<int>();
       step.name = file[i]["name"].as<std::string>();
       step.selected = file[i]["selected"].as<bool>();
-      if (step.time < min_step_time_ms_ || step.delay < min_step_delay_ms_) {
+      if (!is_step_timing_valid(step.time, step.delay)) {
         throw std::runtime_error(
             "Motion file step " + std::to_string(i - 2) +
             " is below the configured minimum time/delay");

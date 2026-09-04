@@ -1,14 +1,16 @@
 # Dynamixel communication settings
 # Both start and end IDs are included in the search.
 motor:
+  # dancew allows zero-delay steps. Other modes require a positive delay.
+  mode: dancew
   port: /dev/ttyUSB-U2D2
-  baud_rate: 3000000  # bps
+  baud_rate: 4500000  # bps
   # A single high-rate loop performs writes and every 10th-cycle status read.
   write_hz: 100
   read_hz: 10
   # Minimum safe values accepted when saving, loading, or operating a step.
   min_step_time_ms: 10
-  min_step_delay_ms: 10
+  min_step_delay_ms: 0
   # Number of complete step-list snapshots retained for Undo/Redo (1-50).
   undo_history_limit: 20
   # Left/right mirror pairs. direction is applied to the motion delta around
@@ -25,9 +27,8 @@ motor:
     - {left: 17, right: 16, direction: -1}
     - {left: 19, right: 18, direction: -1}
     - {left: 21, right: 20, direction: -1}
-    - {left: 25, right: 24, direction: -1}
   id_ranges:
     - start: 0
-      end: 6
+      end: 9
     - start: 10
-      end: 23
+      end: 24
